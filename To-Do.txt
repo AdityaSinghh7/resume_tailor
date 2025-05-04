@@ -1,0 +1,12 @@
+1. Set up project repositories and initialize frontend (NextJS + React) and backend (FastAPI).
+2. Implement user authentication and GitHub integration for project/code ingestion.
+3. Develop backend logic to parse and ingest project code, READMEs, and optional write-ups using TreeSitter.
+4. Store ingested data in a relational database and index with Weaviate for vector storage.
+5. Integrate OpenAI embeddings to embed project data for semantic retrieval.
+6. Build frontend UI for users to view, edit, and manage their ingested projects and write-ups.
+7. Implement semantic search and retrieval using Weaviate and LlamaIndex.
+8. Develop RAG pipeline to rewrite LaTeX resume project sections based on job descriptions.
+9. Ensure traceability of resume bullets to authenticated project records.
+10. Generate and return job-targeted PDF resumes and alignment scores (0–100).
+11. Test end-to-end workflow and refine UX/UI.
+12. Deploy application and monitor for feedback and improvements.
