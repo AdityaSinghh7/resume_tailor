@@ -8,31 +8,11 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
-  const handleGithubLogin = async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      
-      const response = await fetch('/login', {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to login');
-      }
-
-      // If login is successful, redirect to home page
-      router.push('/home');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred during login');
-    } finally {
-      setIsLoading(false);
-    }
+  const handleGithubLogin = () => {
+    const githubClientId = process.env.NEXT_PUBLIC_GITHUB_CLIENT_ID;
+    const redirectUri = 'http://localhost:8000/auth/github/callback';
+    const githubAuthUrl = `https://github.com/login/oauth/authorize?client_id=${githubClientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=read:user,user:email,repo`;
+    window.location.href = githubAuthUrl;
   };
 
   return (
