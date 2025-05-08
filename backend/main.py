@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from dotenv import load_dotenv
 import os
+import logging
+logging.basicConfig(level=logging.INFO)
 
 env_path = os.path.join(os.path.dirname(__file__), '.env')
 print("Loading .env from:", env_path)
