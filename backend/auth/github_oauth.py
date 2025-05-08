@@ -2,6 +2,8 @@ from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import RedirectResponse
 import httpx
 import os
+from db import get_db_pool
+from models import UserCreate
 
 router = APIRouter()
 
@@ -44,6 +46,27 @@ async def github_callback(request: Request, code: str = None):
             headers={"Authorization": f"token {access_token}"}
         )
         user_data = user_resp.json()
+        username = user_data["login"]
+        access_code = access_token
+
+        pool = await get_db_pool()
+        async with pool.acquire() as conn:
+            # Upsert user
+            await conn.execute("""
+                INSERT INTO users (username, access_code)
+                VALUES ($1, $2)
+                ON CONFLICT (username) DO UPDATE SET access_code = EXCLUDED.access_code
+            """, username, access_code)
         return {"access_token": access_token, "user": user_data}
+
+@router.get("/me")
+async def get_current_user(username: str):
+    pool = await get_db_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT * FROM users WHERE username = $1", username)
+        if row:
+            return dict(row)
+        else:
+            raise HTTPException(status_code=404, detail="User not found")
     
     
