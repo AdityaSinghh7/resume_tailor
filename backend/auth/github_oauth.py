@@ -11,6 +11,8 @@ GITHUB_CLIENT_ID = os.getenv("GITHUB_CLIENT_ID")
 GITHUB_CLIENT_SECRET = os.getenv("GITHUB_CLIENT_SECRET")
 GITHUB_OAUTH_CALLBACK_URL = os.getenv("GITHUB_OAUTH_CALLBACK_URL")  # e.g., http://localhost:8000/auth/github/callback
 
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+
 @router.get("/login")
 def login_with_github():
     github_auth_url = (
@@ -57,7 +59,8 @@ async def github_callback(request: Request, code: str = None):
                 VALUES ($1, $2)
                 ON CONFLICT (username) DO UPDATE SET access_code = EXCLUDED.access_code
             """, username, access_code)
-        return {"access_token": access_token, "user": user_data}
+        redirect_url = f"{FRONTEND_URL}/home?access_token={access_token}"
+        return RedirectResponse(redirect_url, status_code=302)
 
 @router.get("/me")
 async def get_current_user(username: str):
