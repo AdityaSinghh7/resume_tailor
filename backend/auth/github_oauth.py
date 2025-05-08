@@ -2,6 +2,8 @@ from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import RedirectResponse
 import httpx
 import os
+from db import get_db_pool
+from models import UserCreate
 
 router = APIRouter()
 
@@ -17,16 +19,13 @@ def login_with_github():
         f"&redirect_uri={GITHUB_OAUTH_CALLBACK_URL}"
         f"&scope=read:user,user:email,repo"
     )
-    return {"auth_url": github_auth_url}
+    return RedirectResponse(github_auth_url)
 
 @router.get("/callback")
 async def github_callback(request: Request, code: str = None):
     if not code:
         raise HTTPException(status_code=400, detail="No code provided")
     async with httpx.AsyncClient() as client:
-        print("GITHUB_CLIENT_ID: ", GITHUB_CLIENT_ID)
-        print("GITHUB_CLIENT_SECRET: ", GITHUB_CLIENT_SECRET)
-        print("GITHUB_OAUTH_CALLBACK_URL: ", GITHUB_OAUTH_CALLBACK_URL)
         token_resp = await client.post(
             "https://github.com/login/oauth/access_token",
             data={
@@ -39,17 +38,35 @@ async def github_callback(request: Request, code: str = None):
         )
         token_data = token_resp.json()
         access_token = token_data.get("access_token")
-        print("access_token: ", access_token)
-        print("token_data: ", token_data)
         if not access_token:
             raise HTTPException(status_code=400, detail="Failed to get access token")
         # Optionally: fetch user info here
-        # user_resp = await client.get(
-        #     "https://api.github.com/user",
-        #     headers={"Authorization": f"token {access_token}"}
-        # )
-        # user_data = await user_resp.json()
-        frontend_home_url = f"http://localhost:3000/home?access_token={access_token}"
-        return RedirectResponse(url=frontend_home_url)
+        user_resp = await client.get(
+            "https://api.github.com/user",
+            headers={"Authorization": f"token {access_token}"}
+        )
+        user_data = user_resp.json()
+        username = user_data["login"]
+        access_code = access_token
+
+        pool = await get_db_pool()
+        async with pool.acquire() as conn:
+            # Upsert user
+            await conn.execute("""
+                INSERT INTO users (username, access_code)
+                VALUES ($1, $2)
+                ON CONFLICT (username) DO UPDATE SET access_code = EXCLUDED.access_code
+            """, username, access_code)
+        return {"access_token": access_token, "user": user_data}
+
+@router.get("/me")
+async def get_current_user(username: str):
+    pool = await get_db_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT * FROM users WHERE username = $1", username)
+        if row:
+            return dict(row)
+        else:
+            raise HTTPException(status_code=404, detail="User not found")
     
     
