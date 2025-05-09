@@ -1,12 +1,31 @@
-1. Set up project repositories and initialize frontend (NextJS + React) and backend (FastAPI).
-2. Implement user authentication and GitHub integration for project/code ingestion.
-3. Develop backend logic to parse and ingest project code, READMEs, and optional write-ups using TreeSitter.
-4. Store ingested data in a relational database and index with Weaviate for vector storage.
-5. Integrate OpenAI embeddings to embed project data for semantic retrieval.
-6. Build frontend UI for users to view, edit, and manage their ingested projects and write-ups.
-7. Implement semantic search and retrieval using Weaviate and LlamaIndex.
-8. Develop RAG pipeline to rewrite LaTeX resume project sections based on job descriptions.
-9. Ensure traceability of resume bullets to authenticated project records.
-10. Generate and return job-targeted PDF resumes and alignment scores (0–100).
-11. Test end-to-end workflow and refine UX/UI.
-12. Deploy application and monitor for feedback and improvements.
+1. Persist Authenticated Users
+Goal: When a user logs in via GitHub, store their info in your users table.
+How:
+After OAuth, fetch the user’s GitHub username (and ideally their GitHub user ID).
+Insert or upsert this info into your users table, along with their access token (as access_code).
+Return a session token or similar to the frontend for future authenticated requests.
+2. Ingest User’s GitHub Projects
+Goal: After login, allow the user to select (or automatically fetch) their GitHub repos and ingest their code/README.
+How:
+Use the GitHub API (with the user’s access token) to list their repositories.
+For each selected repo:
+Clone/download the repo or fetch its files via the API.
+Store the repo’s metadata in the projects table, linking it to the user.
+Save the code/README content for further processing (e.g., in a new table or as files).
+3. Chunk and Embed Project Data
+Goal: Prepare project data for semantic search and RAG.
+How:
+Chunk the code/README into manageable pieces (e.g., by file, function, or paragraph).
+Use OpenAI embeddings to vectorize each chunk.
+Store the embeddings and chunk metadata (e.g., in Weaviate or a new DB table).
+4. Integrate Weaviate for Vector Storage
+Goal: Store and retrieve vector embeddings for semantic search.
+How:
+Set up a Weaviate instance (locally or in the cloud).
+Push your chunk embeddings to Weaviate, with metadata linking back to the project/user.
+5. Implement RAG Pipeline
+Goal: Rewrite the user’s resume project section based on a job description.
+How:
+Accept a job description and retrieve relevant project chunks from Weaviate.
+Use LlamaIndex (or similar) to generate tailored resume bullets, ensuring traceability.
+Return the rewritten section and an alignment score.
