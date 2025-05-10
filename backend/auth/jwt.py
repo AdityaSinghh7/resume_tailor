@@ -1,6 +1,6 @@
 import jwt
 from datetime import datetime, timedelta
-from fastapi import HTTPException
+from fastapi import HTTPException, Header
 import os
 
 SECRET_KEY = os.getenv("SECRET_KEY")
@@ -21,3 +21,10 @@ def verify_access_token(token: str):
         raise HTTPException(status_code=401, detail="Token expired")
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
+
+async def get_current_user_from_token(authorization: str = Header(...)):
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Invalid authorization header")
+    token = authorization.split(" ")[1]
+    payload = verify_access_token(token)
+    return payload

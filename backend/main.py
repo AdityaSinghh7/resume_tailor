@@ -1,18 +1,34 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 import os
 import logging
-logging.basicConfig(level=logging.INFO)
 
-env_path = os.path.join(os.path.dirname(__file__), '.env')
-print("Loading .env from:", env_path)
-load_dotenv(dotenv_path=env_path)
-from auth.github_oauth import router as github_oauth_router
-print("Loaded GITHUB_CLIENT_ID:", os.getenv("GITHUB_CLIENT_ID"))
+# Load environment variables
+load_dotenv()
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Import routers
+from auth.github_oauth import router as auth_router
+from routes.repository_routes import router as repository_router
+
 app = FastAPI()
 
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[os.getenv("FRONTEND_URL", "http://localhost:3000")],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-app.include_router(github_oauth_router, prefix="/auth/github", tags=["auth"])
+# Include routers
+app.include_router(auth_router, prefix="/auth/github", tags=["auth"])
+app.include_router(repository_router, prefix="/api", tags=["repositories"])
 
 @app.get("/")
 async def root():
