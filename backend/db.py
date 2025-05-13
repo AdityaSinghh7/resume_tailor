@@ -11,11 +11,11 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 # Database configuration
-DB_USER = os.getenv("DB_USER", "resume_user")
-DB_PASSWORD = os.getenv("DB_PASSWORD", "resume_password")
-DB_NAME = os.getenv("DB_NAME", "resume_tailor")
-DB_HOST = os.getenv("DB_HOST", "localhost")
-DB_PORT = os.getenv("DB_PORT", "5432")
+POSTGRES_USER = os.getenv("POSTGRES_USER", "resume_user")
+POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "resume_password")
+POSTGRES_DB = os.getenv("POSTGRES_DB", "resume_tailor")
+POSTGRES_HOST = os.getenv("POSTGRES_HOST", "localhost")
+POSTGRES_PORT = os.getenv("POSTGRES_PORT", "5432")
 
 _pool = None
 
@@ -24,13 +24,13 @@ async def get_db_pool():
     try:
         global _pool
         if _pool is None:
-            logger.info(f"Connecting to database {DB_NAME} at {DB_HOST}:{DB_PORT}")
+            logger.info(f"Connecting to database {POSTGRES_DB} at {POSTGRES_HOST}:{POSTGRES_PORT}")
             _pool = await asyncpg.create_pool(
-                user=DB_USER,
-                password=DB_PASSWORD,
-                database=DB_NAME,
-                host=DB_HOST,
-                port=DB_PORT,
+                user=POSTGRES_USER,
+                password=POSTGRES_PASSWORD,
+                database=POSTGRES_DB,
+                host=POSTGRES_HOST,
+                port=POSTGRES_PORT,
                 min_size=1,
                 max_size=10
             )
