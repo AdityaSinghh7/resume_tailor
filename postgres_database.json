@@ -1,0 +1,72 @@
+{
+  "users": {
+    "columns": [
+      {"name": "uid", "type": "integer", "constraints": ["PRIMARY KEY", "NOT NULL"], "default": "nextval('users_uid_seq'::regclass)"},
+      {"name": "username", "type": "varchar(255)", "constraints": ["UNIQUE", "NOT NULL"]},
+      {"name": "access_code", "type": "varchar(255)", "constraints": ["NOT NULL"]}
+    ],
+    "primary_key": ["uid"],
+    "unique": ["username"],
+    "referenced_by": [
+      {"table": "projects", "column": "user_id"}
+    ]
+  },
+  "projects": {
+    "columns": [
+      {"name": "project_id", "type": "integer", "constraints": ["PRIMARY KEY", "NOT NULL"], "default": "nextval('projects_project_id_seq'::regclass)"},
+      {"name": "user_id", "type": "integer", "constraints": ["NOT NULL", "FOREIGN KEY"], "references": {"table": "users", "column": "uid", "on_delete": "CASCADE"}},
+      {"name": "github_url", "type": "varchar(255)", "constraints": ["NOT NULL"]},
+      {"name": "chunk_id", "type": "varchar(255)", "constraints": ["NOT NULL"]}
+    ],
+    "primary_key": ["project_id"],
+    "unique": [["user_id", "github_url"]],
+    "foreign_keys": [
+      {"column": "user_id", "references": {"table": "users", "column": "uid"}, "on_delete": "CASCADE"}
+    ],
+    "referenced_by": [
+      {"table": "repository_files", "column": "project_id"}
+    ]
+  },
+  "repository_files": {
+    "columns": [
+      {"name": "id", "type": "integer", "constraints": ["PRIMARY KEY", "NOT NULL"], "default": "nextval('repository_files_id_seq'::regclass)"},
+      {"name": "project_id", "type": "integer", "constraints": ["NOT NULL", "FOREIGN KEY"], "references": {"table": "projects", "column": "project_id", "on_delete": "CASCADE"}},
+      {"name": "file_path", "type": "varchar(512)", "constraints": ["NOT NULL"]},
+      {"name": "file_type", "type": "varchar(50)"},
+      {"name": "content_hash", "type": "varchar(64)"},
+      {"name": "created_at", "type": "timestamp", "default": "CURRENT_TIMESTAMP"},
+      {"name": "updated_at", "type": "timestamp", "default": "CURRENT_TIMESTAMP"}
+    ],
+    "primary_key": ["id"],
+    "unique": [["project_id", "file_path"]],
+    "foreign_keys": [
+      {"column": "project_id", "references": {"table": "projects", "column": "project_id"}, "on_delete": "CASCADE"}
+    ],
+    "referenced_by": [
+      {"table": "file_chunks", "column": "file_id"}
+    ]
+  },
+  "file_chunks": {
+    "columns": [
+      {"name": "id", "type": "integer", "constraints": ["PRIMARY KEY", "NOT NULL"], "default": "nextval('file_chunks_id_seq'::regclass)"},
+      {"name": "file_id", "type": "integer", "constraints": ["FOREIGN KEY"], "references": {"table": "repository_files", "column": "id", "on_delete": "CASCADE"}},
+      {"name": "chunk_index", "type": "integer", "constraints": ["NOT NULL"]},
+      {"name": "content", "type": "text", "constraints": ["NOT NULL"]},
+      {"name": "embedding_id", "type": "varchar(255)"},
+      {"name": "created_at", "type": "timestamp", "default": "CURRENT_TIMESTAMP"},
+      {"name": "updated_at", "type": "timestamp", "default": "CURRENT_TIMESTAMP"}
+    ],
+    "primary_key": ["id"],
+    "unique": [["file_id", "chunk_index"]],
+    "foreign_keys": [
+      {"column": "file_id", "references": {"table": "repository_files", "column": "id"}, "on_delete": "CASCADE"}
+    ]
+  },
+  "sequences": [
+    {"name": "users_uid_seq", "table": "users", "column": "uid"},
+    {"name": "projects_project_id_seq", "table": "projects", "column": "project_id"},
+    {"name": "repository_files_id_seq", "table": "repository_files", "column": "id"},
+    {"name": "file_chunks_id_seq", "table": "file_chunks", "column": "id"}
+  ]
+}
+
