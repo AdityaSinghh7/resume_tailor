@@ -16,7 +16,9 @@
       {"name": "project_id", "type": "integer", "constraints": ["PRIMARY KEY", "NOT NULL"], "default": "nextval('projects_project_id_seq'::regclass)"},
       {"name": "user_id", "type": "integer", "constraints": ["NOT NULL", "FOREIGN KEY"], "references": {"table": "users", "column": "uid", "on_delete": "CASCADE"}},
       {"name": "github_url", "type": "varchar(255)", "constraints": ["NOT NULL"]},
-      {"name": "chunk_id", "type": "varchar(255)", "constraints": ["NOT NULL"]}
+      {"name": "chunk_id", "type": "varchar(255)", "constraints": ["NOT NULL"]},
+      {"name": "title", "type": "varchar(255)"},
+      {"name": "star_ramble", "type": "text"}
     ],
     "primary_key": ["project_id"],
     "unique": [["user_id", "github_url"]],
@@ -54,12 +56,18 @@
       {"name": "content", "type": "text", "constraints": ["NOT NULL"]},
       {"name": "embedding_id", "type": "varchar(255)"},
       {"name": "created_at", "type": "timestamp", "default": "CURRENT_TIMESTAMP"},
-      {"name": "updated_at", "type": "timestamp", "default": "CURRENT_TIMESTAMP"}
+      {"name": "updated_at", "type": "timestamp", "default": "CURRENT_TIMESTAMP"},
+      {"name": "embedding_vector", "type": "vector(1536)"},
+      {"name": "chunk_type", "type": "varchar(32)", "default": "'code'"}
     ],
     "primary_key": ["id"],
     "unique": [["file_id", "chunk_index"]],
     "foreign_keys": [
       {"column": "file_id", "references": {"table": "repository_files", "column": "id"}, "on_delete": "CASCADE"}
+    ],
+    "indexes": [
+      {"name": "idx_file_chunks_embedding_vector", "columns": ["embedding_vector"], "type": "ivfflat", "ops": "vector_cosine_ops"},
+      {"name": "idx_file_chunks_chunk_type", "columns": ["chunk_type"], "type": "btree"}
     ]
   },
   "sequences": [
