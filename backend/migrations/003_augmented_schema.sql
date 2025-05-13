@@ -21,3 +21,13 @@ CREATE INDEX IF NOT EXISTS idx_file_chunks_embedding_vector ON file_chunks USING
 
 -- Create index for chunk_type
 CREATE INDEX IF NOT EXISTS idx_file_chunks_chunk_type ON file_chunks(chunk_type); 
+
+-- Add 'selected' column to projects
+ALTER TABLE projects
+ADD COLUMN IF NOT EXISTS selected BOOLEAN DEFAULT FALSE;
+
+-- Add 'project_id' column to file_chunks, with foreign key constraint
+ALTER TABLE file_chunks
+ADD COLUMN IF NOT EXISTS project_id INTEGER,
+ADD CONSTRAINT fk_file_chunks_project_id
+    FOREIGN KEY (project_id) REFERENCES projects(project_id) ON DELETE CASCADE;
