@@ -2,19 +2,29 @@
 - [x] Implement GitHub OAuth login (backend done).
 - [x] On successful login, upsert user info (username, GitHub user ID, access token) into the users table.
 - [x] Return a session token to the frontend for authenticated requests.
+- [x] On GitHub OAuth callback, fetch all user repositories and store their metadata (repo url, title, etc.) and file metadata (file path, file type) in the database. Do not fetch file content yet. Only files matching allowed extensions and below the size threshold are included (file size is not stored in DB).
+- [x] Ensure that on repeat sign-in, only new unique repositories are added to the DB (unique on user_id + github_url).
 
 2. Fetch & Display User Repositories (Frontend)
+- [ ] Display the list of repositories directly from the database, showing their selection state (using the 'selected' field for persistence across sign-ins).
 - [ ] Use the GitHub API (with the user's access token) to fetch the list of user repositories (backend logic exists).
 - [ ] Display the list on the frontend, allowing the user to select (tick) which repos to process.
 - [ ] Add a 'Process Selected' button to trigger backend ingestion for selected repos.
 
-3. Process Selected Repositories (Backend)
-- [x] For each selected repo, fetch repository metadata and store in the projects table, linked to the user.
-- [x] Fetch all files (code, README, etc.) via the GitHub API.
-- [x] Store file metadata and content in the repository_files table.
+3. Ingest & Process Selected Repositories (Backend)
+- [ ] Add API endpoint to accept a list of selected repo names from the frontend.
+- [ ] Mark selected repos as 'selected' in the projects table.
+- [ ] For each selected repo:
+    - [ ] Fetch repo metadata and files from GitHub.
+    - [ ] Parse code files (supported extensions, below max size) using TreeSitter.
+    - [ ] Chunk code content (by function/class or size).
+    - [ ] Generate embeddings for each chunk using OpenAI API.
+    - [ ] Store chunks, embeddings, and metadata in file_chunks (with project association).
+    - [ ] Ensure project_id is set for each chunk for easy grouping.
+- [ ] Refactor pipeline for modularity and maintainability.
 
 4. Chunk & Embed Repository Data (Backend)
-- [x] For each file, chunk the content into manageable pieces (by size, function, or paragraph).
+- [ ] For each file, chunk the content into manageable pieces (by size, function, or paragraph).
 - [ ] For each chunk, generate an embedding using the chosen embedding model (e.g., OpenAI, HuggingFace, etc.).
 - [ ] Store the chunk, its metadata, and its embedding in the file_chunks table (using pgvector for the embedding column).
 - [ ] Group vector embeddings by project for efficient retrieval of top N projects and their related chunks.
@@ -30,9 +40,13 @@
 - [ ] Generate a project title, 3-4 bullet summary, and include the project URL.
 - [ ] Assemble and return a resume-ready object (and optionally, a PDF and alignment score).
 
-7. Re-Processing & Updates
+7. Schema & Pipeline Improvements
+- [ ] Review and simplify DB schema if needed for easier project grouping and semantic search.
+- [ ] Ensure all new columns and indexes are documented in postgres_database.json and migrations.
+
+8. Re-Processing & Updates
 - [ ] Allow users to add new projects or re-process existing ones on demand.
 - [ ] Ensure that re-processing does not duplicate data, but updates as needed.
 
-8. RAG Pipeline Implementation
+9. RAG Pipeline Implementation
 - [ ] After backend and frontend are solid, implement the RAG logic for resume generation.

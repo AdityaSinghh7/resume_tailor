@@ -13,7 +13,8 @@ logger = logging.getLogger(__name__)
 
 # Import routers
 from auth.github_oauth import router as auth_router
-from routes.repository_routes import router as repository_router
+# from routes.repository_routes import router as repository_router
+from api.repositories import router as repository_router
 
 app = FastAPI()
 

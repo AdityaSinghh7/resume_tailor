@@ -18,7 +18,8 @@
       {"name": "github_url", "type": "varchar(255)", "constraints": ["NOT NULL"]},
       {"name": "chunk_id", "type": "varchar(255)", "constraints": ["NOT NULL"]},
       {"name": "title", "type": "varchar(255)"},
-      {"name": "star_ramble", "type": "text"}
+      {"name": "star_ramble", "type": "text"},
+      {"name": "selected", "type": "boolean", "default": "FALSE"}
     ],
     "primary_key": ["project_id"],
     "unique": [["user_id", "github_url"]],
@@ -58,7 +59,8 @@
       {"name": "created_at", "type": "timestamp", "default": "CURRENT_TIMESTAMP"},
       {"name": "updated_at", "type": "timestamp", "default": "CURRENT_TIMESTAMP"},
       {"name": "embedding_vector", "type": "vector(1536)"},
-      {"name": "chunk_type", "type": "varchar(32)", "default": "'code'"}
+      {"name": "chunk_type", "type": "varchar(32)", "default": "'code'"},
+      {"name": "project_id", "type": "integer", "constraints": ["FOREIGN KEY"], "references": {"table": "projects", "column": "project_id", "on_delete": "CASCADE"}}
     ],
     "primary_key": ["id"],
     "unique": [["file_id", "chunk_index"]],
