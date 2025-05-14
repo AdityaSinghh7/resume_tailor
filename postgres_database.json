@@ -19,6 +19,8 @@
       {"name": "chunk_id", "type": "varchar(255)", "constraints": ["NOT NULL"]},
       {"name": "title", "type": "varchar(255)"},
       {"name": "star_ramble", "type": "text"},
+      {"name": "summary", "type": "text"},
+      {"name": "summary_embedding_vector", "type": "vector(1536)"},
       {"name": "selected", "type": "boolean", "default": "FALSE"}
     ],
     "primary_key": ["project_id"],

@@ -6,42 +6,44 @@
 - [x] Ensure that on repeat sign-in, only new unique repositories are added to the DB (unique on user_id + github_url).
 
 2. Fetch & Display User Repositories (Frontend)
-- [ ] Display the list of repositories directly from the database, showing their selection state (using the 'selected' field for persistence across sign-ins).
-- [ ] Use the GitHub API (with the user's access token) to fetch the list of user repositories (backend logic exists).
-- [ ] Display the list on the frontend, allowing the user to select (tick) which repos to process.
-- [ ] Add a 'Process Selected' button to trigger backend ingestion for selected repos.
+- [x] Display the list of repositories directly from the database, showing their selection state (using the 'selected' field for persistence across sign-ins).
+- [x] Use the GitHub API (with the user's access token) to fetch the list of user repositories (backend logic exists).
+- [x] Display the list on the frontend, allowing the user to select (tick) which repos to process.
+- [x] Add a 'Process Selected' button to trigger backend ingestion for selected repos.
 
 3. Ingest & Process Selected Repositories (Backend)
-- [ ] Add API endpoint to accept a list of selected repo names from the frontend.
-- [ ] Mark selected repos as 'selected' in the projects table.
-- [ ] For each selected repo:
-    - [ ] Fetch repo metadata and files from GitHub.
-    - [ ] Parse code files (supported extensions, below max size) using TreeSitter.
-    - [ ] Chunk code content (by function/class or size).
-    - [ ] Generate embeddings for each chunk using OpenAI API.
-    - [ ] Store chunks, embeddings, and metadata in file_chunks (with project association).
-    - [ ] Ensure project_id is set for each chunk for easy grouping.
-- [ ] Refactor pipeline for modularity and maintainability.
+- [x] Add API endpoint to accept a list of selected repo names from the frontend.
+- [x] Mark selected repos as 'selected' in the projects table.
+- [x] For each selected repo:
+    - [x] Fetch repo metadata and files from GitHub.
+    - [x] Store file metadata in repository_files table.
+    - [x] Modularize file content fetching from GitHub.
+    - [x] Classify file content as code, informational, or ramble.
+    - [x] Chunk code files using TreeSitter; chunk others generically.
+    - [x] Generate embeddings for each chunk using OpenAI API.
+    - [x] Store chunks, embeddings, and metadata in file_chunks (with project association).
+    - [x] Ensure project_id is set for each chunk for easy grouping.
+- [x] Refactor pipeline for modularity and maintainability.
 
-4. Chunk & Embed Repository Data (Backend)
-- [ ] For each file, chunk the content into manageable pieces (by size, function, or paragraph).
-- [ ] For each chunk, generate an embedding using the chosen embedding model (e.g., OpenAI, HuggingFace, etc.).
-- [ ] Store the chunk, its metadata, and its embedding in the file_chunks table (using pgvector for the embedding column).
-- [ ] Group vector embeddings by project for efficient retrieval of top N projects and their related chunks.
+4. Hybrid Project Embedding (NEW)
+- [x] For each project, after fetching and classifying all content:
+    - [x] Feed all content (code, README, ramble, etc.) into an LLM system prompt to generate a detailed, technology-rich project summary.
+    - [x] Embed this summary and store it as a single vector per project in the vector DB.
+    - [x] Store both the project-level summary embedding and the chunk-level embeddings for hybrid retrieval.
 
 5. User Ramble (STAR Write-up)
-- [ ] Allow the user to optionally submit a "ramble" (project description in STAR format) for each repo (frontend + backend).
-- [ ] Store each ramble as a special chunk in the file_chunks table, with metadata indicating it is a user ramble, and embed it as well.
+- [x] Allow the user to optionally submit a "ramble" (project description in STAR format) for each repo (frontend + backend).
+- [x] Store each ramble as a special chunk in the file_chunks table, with metadata indicating it is a user ramble, and embed it as well.
 
 6. Vector Search & RAG Resume Generation
 - [ ] Allow the user to upload a job description and specify N (number of projects to include).
-- [ ] Run a semantic search over the vector embeddings to find the N most relevant projects (grouped by project).
-- [ ] For each selected project, retrieve all related chunks (including rambles).
+- [ ] Run a semantic search over the project summary embeddings to shortlist top N projects.
+- [ ] For each selected project, run a semantic search over chunk-level embeddings to surface the most relevant details.
 - [ ] Generate a project title, 3-4 bullet summary, and include the project URL.
 - [ ] Assemble and return a resume-ready object (and optionally, a PDF and alignment score).
 
 7. Schema & Pipeline Improvements
-- [ ] Review and simplify DB schema if needed for easier project grouping and semantic search.
+- [x] Add chunk_type and embedding_vector columns to file_chunks for hybrid and semantic search.
 - [ ] Ensure all new columns and indexes are documented in postgres_database.json and migrations.
 
 8. Re-Processing & Updates
@@ -49,4 +51,4 @@
 - [ ] Ensure that re-processing does not duplicate data, but updates as needed.
 
 9. RAG Pipeline Implementation
-- [ ] After backend and frontend are solid, implement the RAG logic for resume generation.
+- [ ] After backend and frontend are solid, implement the RAG logic for resume generation using the hybrid retrieval approach.
