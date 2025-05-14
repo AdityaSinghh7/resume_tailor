@@ -31,3 +31,8 @@ ALTER TABLE file_chunks
 ADD COLUMN IF NOT EXISTS project_id INTEGER,
 ADD CONSTRAINT fk_file_chunks_project_id
     FOREIGN KEY (project_id) REFERENCES projects(project_id) ON DELETE CASCADE;
+
+-- Add summary and summary_embedding_vector columns to projects for hybrid project embedding
+ALTER TABLE projects
+ADD COLUMN IF NOT EXISTS summary TEXT,
+ADD COLUMN IF NOT EXISTS summary_embedding_vector vector(1536);
