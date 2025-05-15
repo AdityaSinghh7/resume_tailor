@@ -156,7 +156,7 @@ export default function HomePage() {
             setMessage('Error polling processing status.');
           }
         };
-        pollInterval = setInterval(pollStatus, 2000);
+        pollInterval = setInterval(pollStatus, 900);
         pollStatus(); // initial call
       }
     } catch (err) {
