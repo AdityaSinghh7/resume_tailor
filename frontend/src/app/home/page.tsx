@@ -31,6 +31,7 @@ export default function HomePage() {
       const token = sessionStorage.getItem('jwt_token');
       if (!token) {
         setMessage('No token found. Please log in again.');
+        setRepos([]); // Defensive: always set to array
         setLoading(false);
         return;
       }
@@ -40,12 +41,24 @@ export default function HomePage() {
             'Authorization': `Bearer ${token}`,
           },
         });
+        if (!res.ok) {
+          setRepos([]); // Defensive: always set to array
+          setMessage('Error fetching repositories.');
+          setLoading(false);
+          return;
+        }
         const data = await res.json();
-        setRepos(data);
-        // Set selectedRepos to those with selected = true
-        const initiallySelected = new Set<number>(data.filter((repo: any) => repo.selected).map((repo: any) => repo.project_id));
-        setSelectedRepos(initiallySelected);
+        if (Array.isArray(data)) {
+          setRepos(data);
+          // Set selectedRepos to those with selected = true
+          const initiallySelected = new Set<number>(data.filter((repo: any) => repo.selected).map((repo: any) => repo.project_id));
+          setSelectedRepos(initiallySelected);
+        } else {
+          setRepos([]); // Defensive: always set to array
+          setMessage('Unexpected response from server.');
+        }
       } catch (err) {
+        setRepos([]); // Defensive: always set to array
         setMessage('Error fetching repositories.');
       } finally {
         setLoading(false);
