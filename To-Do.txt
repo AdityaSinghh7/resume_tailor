@@ -24,6 +24,8 @@
     - [x] Store chunks, embeddings, and metadata in file_chunks (with project association).
     - [x] Ensure project_id is set for each chunk for easy grouping.
 - [x] Refactor pipeline for modularity and maintainability.
+- [x] Allow users to unselect repositories from the frontend and propagate this to the backend and database (set selected = false for unselected repos).
+- [x] When processing, if a repo's ramble has changed since last processing, re-run the pipeline for that repo even if already selected.
 
 4. Hybrid Project Embedding (NEW)
 - [x] For each project, after fetching and classifying all content:
@@ -34,9 +36,15 @@
 5. User Ramble (STAR Write-up)
 - [x] Allow the user to optionally submit a "ramble" (project description in STAR format) for each repo (frontend + backend).
 - [x] Store each ramble as a special chunk in the file_chunks table, with metadata indicating it is a user ramble, and embed it as well.
+- [x] Ensure that if the user updates the ramble and presses process, the backend detects the change and re-processes the project.
 
 6. Vector Search & RAG Resume Generation
-- [ ] Allow the user to upload a job description and specify N (number of projects to include).
+- [x] Allow the user to upload a job description and specify N (number of projects to include).
+- [x] Create a new frontend page for job description input and resume preview, with:
+    - [x] Input box for job description
+    - [x] Output area displaying formatted resume entries (title, bullet points, github url, technologies used)
+    - [x] Ability to switch between the home page and this new page at will
+    - [x] Redirect to this page after processing is finished
 - [ ] Run a semantic search over the project summary embeddings to shortlist top N projects.
 - [ ] For each selected project, run a semantic search over chunk-level embeddings to surface the most relevant details.
 - [ ] Generate a project title, 3-4 bullet summary, and include the project URL.
@@ -49,6 +57,7 @@
 8. Re-Processing & Updates
 - [ ] Allow users to add new projects or re-process existing ones on demand.
 - [ ] Ensure that re-processing does not duplicate data, but updates as needed.
+- [x] Ensure ingestion pipeline at GitHub callback only ingests new projects not already in the DB for repeat sign-ins.
 
 9. RAG Pipeline Implementation
 - [ ] After backend and frontend are solid, implement the RAG logic for resume generation using the hybrid retrieval approach.

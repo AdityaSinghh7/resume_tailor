@@ -27,6 +27,10 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
+        <nav className="w-full bg-gray-900 text-white py-3 px-8 flex gap-6 items-center">
+          <a href="/home" className="hover:underline font-semibold">Home</a>
+          <a href="/resume" className="hover:underline font-semibold">Resume Builder</a>
+        </nav>
         {children}
       </body>
     </html>

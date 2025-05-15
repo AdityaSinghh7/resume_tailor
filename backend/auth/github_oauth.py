@@ -6,7 +6,7 @@ from db import get_db_pool
 from models import UserCreate
 from auth.jwt import create_access_token, verify_access_token
 import logging
-from data_ingestion.github_ingestion import GitHubIngestionService
+from data_ingestion.github_ingestion import GitHubIngestionService, project_exists
 import asyncio
 
 router = APIRouter()
@@ -40,11 +40,19 @@ async def fetch_and_store_all_repos(user_id, access_code):
         repos = await ingestion_service.fetch_user_repositories()
         # Only process public repositories
         public_repos = [repo for repo in repos if not repo.get('private', False)]
-        tasks = [
-            ingestion_service.fetch_and_store_repo_files_metadata(user_id, repo, max_file_size=200_000)
-            for repo in public_repos
-        ]
-        await asyncio.gather(*tasks)
+        tasks = []
+        for repo in public_repos:
+            # Only ingest if project does not already exist
+            exists = await project_exists(user_id, repo["html_url"])
+            if exists:
+                logging.info(f"Skipping existing project for user {user_id}: {repo['html_url']}")
+            else:
+                logging.info(f"Ingesting new project for user {user_id}: {repo['html_url']}")
+                tasks.append(
+                    ingestion_service.fetch_and_store_repo_files_metadata(user_id, repo, max_file_size=200_000)
+                )
+        if tasks:
+            await asyncio.gather(*tasks)
     except Exception as e:
         logging.error(f"Error during repo metadata ingestion: {e}")
 

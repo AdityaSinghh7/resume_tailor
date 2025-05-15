@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 
 export default function HomePage() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const [repos, setRepos] = useState<any[]>([]);
   const [selectedRepos, setSelectedRepos] = useState<Set<number>>(new Set());
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
@@ -41,6 +42,9 @@ export default function HomePage() {
         });
         const data = await res.json();
         setRepos(data);
+        // Set selectedRepos to those with selected = true
+        const initiallySelected = new Set<number>(data.filter((repo: any) => repo.selected).map((repo: any) => repo.project_id));
+        setSelectedRepos(initiallySelected);
       } catch (err) {
         setMessage('Error fetching repositories.');
       } finally {
@@ -112,6 +116,12 @@ export default function HomePage() {
       });
       const data = await res.json();
       setMessage(data.message || 'Processing complete!');
+      // Redirect to resume page after a short delay if processing is successful
+      if (res.ok) {
+        setTimeout(() => {
+          router.push('/resume');
+        }, 1200);
+      }
     } catch (err) {
       setMessage('Error processing repositories.');
     } finally {

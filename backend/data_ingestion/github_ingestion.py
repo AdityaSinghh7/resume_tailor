@@ -128,3 +128,13 @@ class GitHubIngestionService:
                 elif item["type"] == "dir":
                     await _process_dir(repo_full_name, project_id, file_path)
         await _process_dir(repo_full_name, project_id)
+
+# Utility function to check if a project exists for a user
+async def project_exists(user_id: int, github_url: str):
+    pool = await get_db_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT 1 FROM projects WHERE user_id = $1 AND github_url = $2",
+            user_id, github_url
+        )
+        return row is not None

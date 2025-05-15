@@ -171,22 +171,48 @@ async def process_repository(
         raise HTTPException(status_code=400, detail="No repo_ids provided.")
     pool = await get_db_pool()
     async with pool.acquire() as conn:
-        # Fetch current selected status for all requested repo_ids
-        rows = await conn.fetch(
-            "SELECT project_id, selected FROM projects WHERE user_id = $1 AND project_id = ANY($2::int[])",
-            user_id, repo_ids
+        # Fetch all project IDs for the user
+        all_rows = await conn.fetch(
+            "SELECT project_id FROM projects WHERE user_id = $1",
+            user_id
         )
-        # Only process repos that are not already selected
-        to_process = [row["project_id"] for row in rows if not row["selected"]]
-        # Update selected status for all requested repos
+        all_project_ids = [row["project_id"] for row in all_rows]
+        # Set selected = true for those in repo_ids, false for the rest
         await conn.execute(
             """
             UPDATE projects SET selected = (project_id = ANY($1::int[])) WHERE user_id = $2
             """,
             repo_ids, user_id
         )
+        # Set selected = false for all projects not in repo_ids
+        unselected_ids = [pid for pid in all_project_ids if pid not in repo_ids]
+        if unselected_ids:
+            await conn.execute(
+                "UPDATE projects SET selected = false WHERE user_id = $1 AND project_id = ANY($2::int[])",
+                user_id, unselected_ids
+            )
+        # Fetch current selected status for all requested repo_ids
+        rows = await conn.fetch(
+            "SELECT project_id, selected, star_ramble FROM projects WHERE user_id = $1 AND project_id = ANY($2::int[])",
+            user_id, repo_ids
+        )
+        # For each selected repo, check if the ramble has changed since last processing
+        to_process = []
+        for row in rows:
+            project_id = row["project_id"]
+            is_selected = row["selected"]
+            current_ramble = row["star_ramble"] or ""
+            # Fetch the last processed ramble chunk content (if any)
+            ramble_chunk_row = await conn.fetchrow(
+                "SELECT content FROM file_chunks WHERE project_id = $1 AND chunk_type = 'ramble' ORDER BY id DESC LIMIT 1",
+                project_id
+            )
+            last_processed_ramble = ramble_chunk_row["content"] if ramble_chunk_row else ""
+            # If not selected, or if ramble has changed, add to process list
+            if (not is_selected) or (current_ramble.strip() != last_processed_ramble.strip()):
+                to_process.append(project_id)
         if not to_process:
-            return {"message": "All selected repositories are already processed. No action taken."}
+            return {"message": "All selected repositories are already processed and rambles unchanged. No action taken."}
         user_row = await conn.fetchrow("SELECT access_code FROM users WHERE uid = $1", user_id)
         if not user_row:
             raise HTTPException(status_code=404, detail="User not found.")
