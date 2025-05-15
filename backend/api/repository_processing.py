@@ -210,7 +210,7 @@ async def process_repository(
                 project_id
             )
             last_processed_ramble = ramble_chunk_row["content"] if ramble_chunk_row else ""
-            if (not is_selected) or (current_ramble.strip() != last_processed_ramble.strip()):
+            if (not is_selected) or (ramble_chunk_row is None) or (current_ramble.strip() != last_processed_ramble.strip()):
                 to_process.append(project_id)
         if not to_process:
             PROCESS_STATUS[user_id] = {"status": "done", "message": "All selected repositories are already processed and rambles unchanged. No action taken."}

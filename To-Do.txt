@@ -64,5 +64,5 @@
 - [ ] After backend and frontend are solid, implement the RAG logic for resume generation using the hybrid retrieval approach.
 
 10. Refactor /api/process endpoint to start processing in the background and return immediately.
-- [ ] Implement a status endpoint so the frontend can poll for processing completion.
-- [ ] Update the frontend to poll /api/process_status after starting processing, and only redirect to /resume when status is "done".
+- [x] Implement a status endpoint so the frontend can poll for processing completion.
+- [x] Update the frontend to poll /api/process_status after starting processing, and only redirect to /resume when status is "done".
