@@ -171,16 +171,26 @@ async def process_repository(
         raise HTTPException(status_code=400, detail="No repo_ids provided.")
     pool = await get_db_pool()
     async with pool.acquire() as conn:
+        # Fetch current selected status for all requested repo_ids
+        rows = await conn.fetch(
+            "SELECT project_id, selected FROM projects WHERE user_id = $1 AND project_id = ANY($2::int[])",
+            user_id, repo_ids
+        )
+        # Only process repos that are not already selected
+        to_process = [row["project_id"] for row in rows if not row["selected"]]
+        # Update selected status for all requested repos
         await conn.execute(
             """
             UPDATE projects SET selected = (project_id = ANY($1::int[])) WHERE user_id = $2
             """,
             repo_ids, user_id
         )
+        if not to_process:
+            return {"message": "All selected repositories are already processed. No action taken."}
         user_row = await conn.fetchrow("SELECT access_code FROM users WHERE uid = $1", user_id)
         if not user_row:
             raise HTTPException(status_code=404, detail="User not found.")
         access_token = user_row["access_code"]
         service = RepositoryProcessingService(access_token)
-        await service.process_repositories(user_id, repo_ids, conn)
-    return {"message": "Repository processing started. Refactored pipeline used."}
+        await service.process_repositories(user_id, to_process, conn)
+    return {"message": f"Repository processing started for {len(to_process)} new repositories. Refactored pipeline used."}

@@ -4,3 +4,4 @@ backend/.env
 backend/auth/__pycache__/
 
 backend/**/__pycache__/
+INGESTION_PIPELINE_CHECKLIST.md

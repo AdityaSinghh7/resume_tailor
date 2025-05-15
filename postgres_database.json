@@ -71,7 +71,8 @@
     ],
     "indexes": [
       {"name": "idx_file_chunks_embedding_vector", "columns": ["embedding_vector"], "type": "ivfflat", "ops": "vector_cosine_ops"},
-      {"name": "idx_file_chunks_chunk_type", "columns": ["chunk_type"], "type": "btree"}
+      {"name": "idx_file_chunks_chunk_type", "columns": ["chunk_type"], "type": "btree"},
+      {"name": "unique_project_ramble_chunk", "columns": ["project_id"], "type": "btree", "unique": true, "where": "chunk_type = 'ramble'"}
     ]
   },
   "sequences": [

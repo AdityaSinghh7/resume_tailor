@@ -102,7 +102,7 @@ export default function HomePage() {
     setMessage(null);
     const token = sessionStorage.getItem('jwt_token');
     try {
-      const res = await fetch('http://localhost:8000/repositories/ingest', {
+      const res = await fetch('http://localhost:8000/api/process', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -199,6 +199,15 @@ export default function HomePage() {
             >
               {processing ? 'Processing...' : 'Process Selected'}
             </button>
+            {processing && (
+              <div className="flex justify-center items-center mt-4">
+                <svg className="animate-spin h-8 w-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
+                </svg>
+                <span className="ml-3 text-blue-700">Processing repositories, please wait...</span>
+              </div>
+            )}
             {message && (
               <div className="mt-4 text-blue-700 bg-blue-100 p-2 rounded">{message}</div>
             )}

@@ -1,7 +1,7 @@
 from typing import List, Optional
 import logging
 from db import get_db_pool
-from data_ingestion.github_ingestion import GitHubIngestionService
+from data_ingestion.github_ingestion import GitHubIngestionService, TEXT_FILE_EXTENSIONS
 from .chunking import chunk_code, chunk_text, embed_texts, generate_project_summary
 import numpy as np
 
@@ -32,9 +32,9 @@ class RepositoryProcessingService:
                         """
                         INSERT INTO file_chunks (file_id, project_id, chunk_index, content, embedding_vector, chunk_type)
                         VALUES (NULL, $1, $2, $3, $4, $5)
-                        ON CONFLICT (project_id, chunk_index) DO UPDATE SET content = EXCLUDED.content, embedding_vector = EXCLUDED.embedding_vector, chunk_type = EXCLUDED.chunk_type
+                        ON CONFLICT (project_id) WHERE chunk_type = 'ramble' DO UPDATE SET content = EXCLUDED.content, embedding_vector = EXCLUDED.embedding_vector, chunk_type = EXCLUDED.chunk_type
                         """,
-                        project_id, idx, chunk, embedding.tolist(), 'ramble'
+                        project_id, idx, chunk, str(embedding.tolist()), 'ramble'
                     )
             # Process files
             files = await conn.fetch(
@@ -48,7 +48,7 @@ class RepositoryProcessingService:
                 file_name = abs_file_path.split('/')[-1]
                 # Classify content type
                 ext = f".{file_type.lower()}" if file_type else ""
-                if ext in self.ingestion_service.TEXT_FILE_EXTENSIONS:
+                if ext in TEXT_FILE_EXTENSIONS:
                     content_type = "code"
                 else:
                     content_type = "informational"
@@ -67,7 +67,7 @@ class RepositoryProcessingService:
                         VALUES ($1, $2, $3, $4, $5, $6)
                         ON CONFLICT (file_id, chunk_index) DO UPDATE SET content = EXCLUDED.content, embedding_vector = EXCLUDED.embedding_vector, chunk_type = EXCLUDED.chunk_type
                         """,
-                        file_id, project_id, idx, chunk, embedding.tolist(), content_type
+                        file_id, project_id, idx, chunk, str(embedding.tolist()), content_type
                     )
             # After processing all files and rambles, generate and store project summary and embedding
             # Gather all chunk contents for this project
@@ -83,7 +83,7 @@ class RepositoryProcessingService:
                     """
                     UPDATE projects SET summary = $1, summary_embedding_vector = $2 WHERE project_id = $3
                     """,
-                    summary, summary_embedding.tolist(), project_id
+                    summary, str(summary_embedding.tolist()), project_id
                 )
 
     async def _fetch_file_content(self, abs_file_path: str) -> Optional[str]:
