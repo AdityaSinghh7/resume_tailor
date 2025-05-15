@@ -45,7 +45,8 @@
     - [x] Output area displaying formatted resume entries (title, bullet points, github url, technologies used)
     - [x] Ability to switch between the home page and this new page at will
     - [x] Redirect to this page after processing is finished
-- [ ] Run a semantic search over the project summary embeddings to shortlist top N projects.
+- [x] Create a modular backend RAG pipeline endpoint for job description + N → resume entries.
+- [x] Run a semantic search over the project summary embeddings to shortlist top N projects.
 - [ ] For each selected project, run a semantic search over chunk-level embeddings to surface the most relevant details.
 - [ ] Generate a project title, 3-4 bullet summary, and include the project URL.
 - [ ] Assemble and return a resume-ready object (and optionally, a PDF and alignment score).

@@ -16,6 +16,7 @@ from auth.github_oauth import router as auth_router
 # from routes.repository_routes import router as repository_router
 from api.repositories import router as repository_router
 from api.repository_processing import router as processing_router
+from api.rag import router as rag_router
 
 app = FastAPI()
 
@@ -32,6 +33,7 @@ app.add_middleware(
 app.include_router(auth_router, prefix="/auth/github", tags=["auth"])
 app.include_router(repository_router, prefix="/api", tags=["repositories"])
 app.include_router(processing_router, prefix="/api", tags=["processing"])
+app.include_router(rag_router, prefix="/api", tags=["rag"])
 
 @app.get("/")
 async def root():
