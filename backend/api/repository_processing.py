@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 from typing import List
 from db import get_db_pool
@@ -160,9 +160,13 @@ def get_embedding(text: str, model: str = "text-embedding-3-small"):
     response = openai_client.embeddings.create(input=[text], model=model)
     return response.data[0].embedding
 
+# In-memory status tracker (for demo; use Redis/DB for production)
+PROCESS_STATUS = {}
+
 @router.post("/process")
 async def process_repository(
     request: ProcessRequest,
+    background_tasks: BackgroundTasks,
     authorization: dict = Depends(get_current_user_from_token)
 ):
     user_id = authorization["uid"]
@@ -196,27 +200,44 @@ async def process_repository(
             "SELECT project_id, selected, star_ramble FROM projects WHERE user_id = $1 AND project_id = ANY($2::int[])",
             user_id, repo_ids
         )
-        # For each selected repo, check if the ramble has changed since last processing
         to_process = []
         for row in rows:
             project_id = row["project_id"]
             is_selected = row["selected"]
             current_ramble = row["star_ramble"] or ""
-            # Fetch the last processed ramble chunk content (if any)
             ramble_chunk_row = await conn.fetchrow(
                 "SELECT content FROM file_chunks WHERE project_id = $1 AND chunk_type = 'ramble' ORDER BY id DESC LIMIT 1",
                 project_id
             )
             last_processed_ramble = ramble_chunk_row["content"] if ramble_chunk_row else ""
-            # If not selected, or if ramble has changed, add to process list
             if (not is_selected) or (current_ramble.strip() != last_processed_ramble.strip()):
                 to_process.append(project_id)
         if not to_process:
+            PROCESS_STATUS[user_id] = {"status": "done", "message": "All selected repositories are already processed and rambles unchanged. No action taken."}
             return {"message": "All selected repositories are already processed and rambles unchanged. No action taken."}
         user_row = await conn.fetchrow("SELECT access_code FROM users WHERE uid = $1", user_id)
         if not user_row:
             raise HTTPException(status_code=404, detail="User not found.")
         access_token = user_row["access_code"]
         service = RepositoryProcessingService(access_token)
-        await service.process_repositories(user_id, to_process, conn)
-    return {"message": f"Repository processing started for {len(to_process)} new repositories. Refactored pipeline used."}
+        # Set status to processing
+        PROCESS_STATUS[user_id] = {"status": "processing", "message": f"Processing {len(to_process)} repositories..."}
+        # Schedule background task
+        background_tasks.add_task(process_repositories_background, service, user_id, to_process)
+    return {"message": f"Repository processing started for {len(to_process)} new repositories. Processing in background."}
+
+async def process_repositories_background(service, user_id, to_process):
+    try:
+        pool = await get_db_pool()
+        async with pool.acquire() as conn:
+            await service.process_repositories(user_id, to_process, conn)
+        PROCESS_STATUS[user_id] = {"status": "done", "message": "Processing complete."}
+    except Exception as e:
+        import traceback
+        PROCESS_STATUS[user_id] = {"status": "error", "message": str(e), "trace": traceback.format_exc()}
+
+@router.get("/process_status")
+async def get_process_status(authorization: dict = Depends(get_current_user_from_token)):
+    user_id = authorization["uid"]
+    status = PROCESS_STATUS.get(user_id, {"status": "idle", "message": "No processing started."})
+    return status

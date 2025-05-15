@@ -47,7 +47,7 @@
     - [x] Redirect to this page after processing is finished
 - [x] Create a modular backend RAG pipeline endpoint for job description + N → resume entries.
 - [x] Run a semantic search over the project summary embeddings to shortlist top N projects.
-- [ ] For each selected project, run a semantic search over chunk-level embeddings to surface the most relevant details.
+- [x] For each selected project, run a semantic search over chunk-level embeddings to surface the most relevant details.
 - [ ] Generate a project title, 3-4 bullet summary, and include the project URL.
 - [ ] Assemble and return a resume-ready object (and optionally, a PDF and alignment score).
 
@@ -62,3 +62,7 @@
 
 9. RAG Pipeline Implementation
 - [ ] After backend and frontend are solid, implement the RAG logic for resume generation using the hybrid retrieval approach.
+
+10. Refactor /api/process endpoint to start processing in the background and return immediately.
+- [ ] Implement a status endpoint so the frontend can poll for processing completion.
+- [ ] Update the frontend to poll /api/process_status after starting processing, and only redirect to /resume when status is "done".

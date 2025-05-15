@@ -115,16 +115,39 @@ export default function HomePage() {
         body: JSON.stringify({ repo_ids: Array.from(selectedRepos) }),
       });
       const data = await res.json();
-      setMessage(data.message || 'Processing complete!');
-      // Redirect to resume page after a short delay if processing is successful
+      setMessage(data.message || 'Processing started!');
       if (res.ok) {
-        setTimeout(() => {
-          router.push('/resume');
-        }, 1200);
+        // Poll for status
+        let pollInterval: NodeJS.Timeout;
+        const pollStatus = async () => {
+          try {
+            const statusRes = await fetch('http://localhost:8000/api/process_status', {
+              headers: { 'Authorization': `Bearer ${token}` },
+            });
+            const statusData = await statusRes.json();
+            setMessage(statusData.message || 'Processing...');
+            if (statusData.status === 'done') {
+              clearInterval(pollInterval);
+              setProcessing(false);
+              setTimeout(() => {
+                router.push('/resume');
+              }, 1200);
+            } else if (statusData.status === 'error') {
+              clearInterval(pollInterval);
+              setProcessing(false);
+              setMessage('Error: ' + (statusData.message || 'Processing failed.'));
+            }
+          } catch (e) {
+            clearInterval(pollInterval);
+            setProcessing(false);
+            setMessage('Error polling processing status.');
+          }
+        };
+        pollInterval = setInterval(pollStatus, 2000);
+        pollStatus(); // initial call
       }
     } catch (err) {
       setMessage('Error processing repositories.');
-    } finally {
       setProcessing(false);
     }
   };
