@@ -97,11 +97,11 @@ class RAGPipelineService:
             "The technologies array should be ordered from most to least relevant to the job description. "
             "The first bullet point should be an overall description of the project. "
             "The subsequent bullet points should describe the most relevant details of the project in the following format: 'Accomplished [X] as measured by [Y], by doing [Z].' Use strong, resume-minded action verbs. "
-            "If there are no clear ways (quantitative or qualitative) to measure the accomplishment, do NOT hallucinate or invent values—just omit the 'as measured by [Y]' part. "
-            "Use the project summary and the most relevant code/text chunks. "
-            "Bullets should be achievement-oriented and relevant to the job description. "
-            "If possible, infer technologies used from the content, but also cross-reference the provided list of technologies/concepts from the job description. "
-            "If a technology/concept from the job description is relevant to the project, include it in the technologies array. "
+            "IMPORTANT: Only use information that is explicitly present in the project summary, code, README, or provided chunks. "
+            "Do NOT invent, infer, or assume any details that are not present in the project content, even if they are mentioned in the job description. "
+            "If a detail is not present, omit it rather than guessing or making it up. "
+            "The job description is provided only for alignment and relevance, not for inventing new facts. "
+            "Bullets should be achievement-oriented and relevant to the job description, but strictly factual. "
             "Respond ONLY with a valid JSON object."
         )
         # Compose the user prompt
