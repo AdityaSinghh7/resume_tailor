@@ -132,9 +132,54 @@ class RAGPipelineService:
         return float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b)))
 
     async def generate_formatted_resume(self, user_id: int, job_description: str, n_projects: int):
+        """
+        Generate a resume-ready object for the user, given a job description and number of projects to include.
+        Returns a dict with:
+            - entries: list of formatted resume entries (dicts), each including alignment_score and github_url
+        """
         # 1. Embed the job description
-        # 2. Retrieve top N project summaries by semantic similarity
-        # 3. For each project, retrieve most relevant chunks
-        # 4. Generate formatted resume entries
-        # (Implementation to be filled in)
-        pass 
+        job_desc_embedding = self._get_embedding(job_description)
+        pool = self.db_pool
+        async with pool.acquire() as conn:
+            # 2. Retrieve top N project summaries by semantic similarity (cosine distance)
+            rows = await conn.fetch(
+                """
+                SELECT project_id, title, summary, github_url, summary_embedding_vector
+                FROM projects
+                WHERE user_id = $1 AND summary_embedding_vector IS NOT NULL
+                """,
+                user_id
+            )
+            if not rows:
+                return {
+                    "entries": []
+                }
+            # Compute cosine similarity
+            scored = []
+            for row in rows:
+                vec = np.array(row["summary_embedding_vector"], dtype=np.float32)
+                sim = self._cosine_similarity(job_desc_embedding, vec)
+                scored.append((sim, row))
+            # Sort by similarity, descending
+            scored.sort(reverse=True, key=lambda x: x[0])
+            top = scored[:n_projects]
+            # For each project, get top K relevant chunks and generate resume entry
+            entries = []
+            for sim, row in top:
+                project_id = row["project_id"]
+                chunks = await self._get_top_chunks(conn, project_id, job_desc_embedding, k=3)
+                resume_entry = await self._generate_resume_entry_llm(
+                    job_description=job_description,
+                    project_title=row["title"],
+                    github_url=row["github_url"],
+                    summary=row["summary"],
+                    top_chunks=chunks
+                )
+                # Always set github_url from DB
+                resume_entry["github_url"] = row["github_url"]
+                # Add alignment_score to the entry
+                resume_entry["alignment_score"] = sim
+                entries.append(resume_entry)
+            return {
+                "entries": entries
+            } 

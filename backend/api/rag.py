@@ -26,7 +26,7 @@ async def rag_resume(
     pool = await get_db_pool()
     service = RAGPipelineService(pool, openai_client)
     try:
-        resume_entries = await service.generate_resume(user_id, request.job_description, request.n_projects)
-        return {"entries": resume_entries}
+        result = await service.generate_formatted_resume(user_id, request.job_description, request.n_projects)
+        return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) 

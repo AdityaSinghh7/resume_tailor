@@ -15,33 +15,27 @@ export default function ResumeBuilderPage() {
     setLoading(true);
     setError(null);
     setOutput([]);
-    // TODO: Call backend API with jobDescription and numProjects
-    // Simulate output for now
-    setTimeout(() => {
-      setOutput([
-        {
-          title: "Open Source Project A",
-          bullets: [
-            "Implemented feature X using React and Node.js",
-            "Improved performance by 30%",
-            "Collaborated with 5 contributors"
-          ],
-          github_url: "https://github.com/user/project-a",
-          technologies: ["React", "Node.js", "PostgreSQL"]
+    try {
+      const response = await fetch("/api/rag_resume", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
         },
-        {
-          title: "Data Pipeline B",
-          bullets: [
-            "Built scalable ETL pipeline in Python",
-            "Integrated with AWS S3 and Redshift",
-            "Automated data quality checks"
-          ],
-          github_url: "https://github.com/user/project-b",
-          technologies: ["Python", "AWS", "Redshift"]
-        }
-      ]);
+        body: JSON.stringify({
+          job_description: jobDescription,
+          n_projects: numProjects
+        })
+      });
+      if (!response.ok) {
+        throw new Error("Failed to generate resume");
+      }
+      const data = await response.json();
+      setOutput(data.entries);
+    } catch (err: any) {
+      setError(err.message || "Unknown error");
+    } finally {
       setLoading(false);
-    }, 1200);
+    }
   };
 
   return (
@@ -88,6 +82,9 @@ export default function ResumeBuilderPage() {
                       <span className="text-lg font-bold text-blue-900">{entry.title}</span>
                       <a href={entry.github_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-sm">GitHub</a>
                     </div>
+                    {typeof entry.alignment_score !== 'undefined' && (
+                      <div className="text-xs text-gray-500 mb-1">Alignment Score: {entry.alignment_score.toFixed(3)}</div>
+                    )}
                     <ul className="list-disc pl-6 text-gray-800 mb-2">
                       {entry.bullets.map((b: string, i: number) => (
                         <li key={i}>{b}</li>

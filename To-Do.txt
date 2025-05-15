@@ -48,8 +48,9 @@
 - [x] Create a modular backend RAG pipeline endpoint for job description + N → resume entries.
 - [x] Run a semantic search over the project summary embeddings to shortlist top N projects.
 - [x] For each selected project, run a semantic search over chunk-level embeddings to surface the most relevant details.
-- [ ] Generate a project title, 3-4 bullet summary, and include the project URL.
-- [ ] Assemble and return a resume-ready object (and optionally, a PDF and alignment score).
+- [x] Generate a project title, 3-4 bullet summary, and include the project URL.
+- [x] Assemble and return a resume-ready object (and optionally, a PDF and alignment score).
+- [x] Calculate and return individual alignment scores for each resume object and a list of github urls.
 
 7. Schema & Pipeline Improvements
 - [x] Add chunk_type and embedding_vector columns to file_chunks for hybrid and semantic search.
