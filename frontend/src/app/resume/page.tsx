@@ -15,15 +15,23 @@ export default function ResumeBuilderPage() {
     setLoading(true);
     setError(null);
     setOutput([]);
+    // Debug log
+    console.log({
+      job_description: jobDescription,
+      n_projects: numProjects,
+      typeofNumProjects: typeof numProjects
+    });
+    const token = sessionStorage.getItem('jwt_token');
     try {
-      const response = await fetch("/api/rag_resume", {
+      const response = await fetch("http://localhost:8000/api/rag_resume", {
         method: "POST",
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          "Authorization": token ? `Bearer ${token}` : ""
         },
         body: JSON.stringify({
           job_description: jobDescription,
-          n_projects: numProjects
+          n_projects: Number(numProjects) // Ensure it's a number
         })
       });
       if (!response.ok) {

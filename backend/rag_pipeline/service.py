@@ -1,5 +1,7 @@
 import numpy as np
 import json
+import ast
+import re
 
 class RAGPipelineService:
     """
@@ -31,6 +33,7 @@ class RAGPipelineService:
                 vec = np.array(row["summary_embedding_vector"], dtype=np.float32)
                 sim = self._cosine_similarity(job_desc_embedding, vec)
                 scored.append((sim, row))
+                print(f"[service.py] Cosine similarity for project_id={row['project_id']}: {sim:.4f}")
             # Sort by similarity, descending
             scored.sort(reverse=True, key=lambda x: x[0])
             top = scored[:n_projects]
@@ -63,7 +66,11 @@ class RAGPipelineService:
             return []
         scored = []
         for row in rows:
-            vec = np.array(row["embedding_vector"], dtype=np.float32)
+            vec_raw = row["embedding_vector"]
+            if isinstance(vec_raw, str):
+                vec = np.array(ast.literal_eval(vec_raw), dtype=np.float32)
+            else:
+                vec = np.array(vec_raw, dtype=np.float32)
             sim = self._cosine_similarity(query_embedding, vec)
             scored.append((sim, row))
         scored.sort(reverse=True, key=lambda x: x[0])
@@ -78,10 +85,14 @@ class RAGPipelineService:
         ]
 
     async def _generate_resume_entry_llm(self, job_description, project_title, github_url, summary, top_chunks):
+        print(f"[service.py] Calling LLM for project_title={project_title}, github_url={github_url}")
+        # Extract technologies/concepts from job description using LLM
+        job_desc_techs = await self._extract_technologies(job_description)
         # Compose the system prompt
         system_prompt = (
-            "You are a helpful assistant that generates resume entries for software engineers. "
-            "Given a job description and a project, generate a JSON object with the following fields: "
+            "You are an expert technical recruiter at a big tech company. Given a job description, a list of relevant technologies/concepts from the job description, and a project, "
+            "parse and extract every minute and relevant technology, library, framework, API, tool, and architectural pattern used in the project, even if minor or only used in a small part. "
+            "Generate a JSON object with the following fields: "
             "title (string), bullets (array of 3-4 concise bullet points), github_url (string), and technologies (array of strings). "
             "The technologies array should be ordered from most to least relevant to the job description. "
             "The first bullet point should be an overall description of the project. "
@@ -89,12 +100,14 @@ class RAGPipelineService:
             "If there are no clear ways (quantitative or qualitative) to measure the accomplishment, do NOT hallucinate or invent values—just omit the 'as measured by [Y]' part. "
             "Use the project summary and the most relevant code/text chunks. "
             "Bullets should be achievement-oriented and relevant to the job description. "
-            "If possible, infer technologies used from the content. "
+            "If possible, infer technologies used from the content, but also cross-reference the provided list of technologies/concepts from the job description. "
+            "If a technology/concept from the job description is relevant to the project, include it in the technologies array. "
             "Respond ONLY with a valid JSON object."
         )
         # Compose the user prompt
         user_prompt = (
             f"Job Description:\n{job_description}\n\n"
+            f"Technologies/Concepts from Job Description: {', '.join(job_desc_techs)}\n\n"
             f"Project Title: {project_title}\n"
             f"GitHub URL: {github_url}\n"
             f"Project Summary: {summary}\n"
@@ -102,6 +115,7 @@ class RAGPipelineService:
         )
         for i, chunk in enumerate(top_chunks):
             user_prompt += f"Chunk {i+1} ({chunk['chunk_type']}):\n{chunk['content']}\n\n"
+        print(f"[service.py] User prompt size: {len(user_prompt)} characters | max_tokens: 1024 | temperature: 0.7")
         # Call the LLM
         response = self.openai_client.chat.completions.create(
             model="gpt-4o",
@@ -109,14 +123,23 @@ class RAGPipelineService:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ],
-            temperature=0.3,
-            max_tokens=512
+            temperature=0.7,
+            max_tokens=1024
         )
         # Parse the JSON from the response
         content = response.choices[0].message.content
+        # Clean up markdown code block if present
+        if content.strip().startswith('```'):
+            # Remove triple backticks and optional 'json' language tag
+            content = content.strip().lstrip('`').lstrip('json').lstrip('\n').rstrip('`').strip()
+            # Remove any trailing triple backticks
+            if content.endswith('```'):
+                content = content[:-3].strip()
         try:
             resume_entry = json.loads(content)
-        except Exception:
+        except Exception as e:
+            print(f"[service.py] ERROR parsing LLM response for project_title={project_title}: {e}")
+            print(f"[service.py] LLM raw response: {content}")
             # fallback: return as plain text if parsing fails
             resume_entry = {"title": project_title, "bullets": [content], "github_url": github_url, "technologies": []}
         return resume_entry
@@ -131,12 +154,47 @@ class RAGPipelineService:
             return 0.0
         return float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b)))
 
+    async def _extract_technologies(self, job_description: str):
+        """
+        Use the OpenAI LLM to extract a list of relevant technologies, frameworks, libraries, APIs, tools, and skills from the job description.
+        Returns a Python list of strings.
+        """
+        system_prompt = (
+            "You are an expert technical recruiter. Given a job description, extract and return ONLY a Python list of strings containing all relevant technologies, frameworks, libraries, APIs, tools, and technical skills mentioned or implied in the job description. "
+            "Be exhaustive and do not include any explanation or extra text."
+        )
+        user_prompt = f"Job Description:\n{job_description}\n\nList all relevant technologies, frameworks, libraries, APIs, tools, and technical skills as a Python list of strings."
+        response = self.openai_client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=0.0,
+            max_tokens=256
+        )
+        content = response.choices[0].message.content.strip()
+        # Remove markdown code block formatting if present
+        if content.startswith('```'):
+            content = content.lstrip('`').lstrip('python').lstrip('json').lstrip('\n').rstrip('`').strip()
+            if content.endswith('```'):
+                content = content[:-3].strip()
+        # Try to safely evaluate the Python list
+        try:
+            tech_list = ast.literal_eval(content)
+            if isinstance(tech_list, list):
+                print(f"[service.py] Extracted technologies from job description: {tech_list}")
+                return [str(t).strip() for t in tech_list]
+            else:
+                print(f"[service.py] LLM extraction did not return a list. Raw: {content}")
+                return []
+        except Exception as e:
+            print(f"[service.py] ERROR parsing LLM technology extraction: {e}")
+            print(f"[service.py] LLM raw response: {content}")
+            return []
+
     async def generate_formatted_resume(self, user_id: int, job_description: str, n_projects: int):
-        """
-        Generate a resume-ready object for the user, given a job description and number of projects to include.
-        Returns a dict with:
-            - entries: list of formatted resume entries (dicts), each including alignment_score and github_url
-        """
+        print(f"[service.py] generate_formatted_resume called with user_id={user_id}, n_projects={n_projects}, job_description length={len(job_description)}")
         # 1. Embed the job description
         job_desc_embedding = self._get_embedding(job_description)
         pool = self.db_pool
@@ -150,23 +208,32 @@ class RAGPipelineService:
                 """,
                 user_id
             )
+            print(f"[service.py] Retrieved {len(rows)} projects from DB for user_id={user_id}")
             if not rows:
+                print("[service.py] No projects found for user.")
                 return {
                     "entries": []
                 }
             # Compute cosine similarity
             scored = []
             for row in rows:
-                vec = np.array(row["summary_embedding_vector"], dtype=np.float32)
+                vec_raw = row["summary_embedding_vector"]
+                if isinstance(vec_raw, str):
+                    vec = np.array(ast.literal_eval(vec_raw), dtype=np.float32)
+                else:
+                    vec = np.array(vec_raw, dtype=np.float32)
                 sim = self._cosine_similarity(job_desc_embedding, vec)
                 scored.append((sim, row))
+                print(f"[service.py] Cosine similarity for project_id={row['project_id']}: {sim:.4f}")
             # Sort by similarity, descending
             scored.sort(reverse=True, key=lambda x: x[0])
             top = scored[:n_projects]
+            print(f"[service.py] Top {len(top)} projects selected for resume generation.")
             # For each project, get top K relevant chunks and generate resume entry
             entries = []
             for sim, row in top:
                 project_id = row["project_id"]
+                print(f"[service.py] Generating entry for project_id={project_id}, sim={sim}")
                 chunks = await self._get_top_chunks(conn, project_id, job_desc_embedding, k=3)
                 resume_entry = await self._generate_resume_entry_llm(
                     job_description=job_description,
@@ -180,6 +247,7 @@ class RAGPipelineService:
                 # Add alignment_score to the entry
                 resume_entry["alignment_score"] = sim
                 entries.append(resume_entry)
+            print(f"[service.py] Returning {len(entries)} resume entries.")
             return {
                 "entries": entries
             } 

@@ -94,9 +94,11 @@ def generate_project_summary(all_contents: List[str], model: str = "gpt-4o") -> 
     if len(joined_content) > 16000:
         joined_content = joined_content[:16000]  # crude truncation for safety
     system_prompt = (
-        "You are an expert software engineer. Given the following project content (code, README, user ramble, etc.), "
-        "write a detailed, technology-rich summary of the project. Highlight the main technologies, architecture, "
-        "notable features, and what makes the project interesting."
+        "You are an expert technical recruiter at a big tech company. Given the following project content (code, README, user ramble, etc.), "
+        "parse and extract every minute and relevant technology, library, framework, API, tool, and architectural pattern used in the project, even if minor or only used in a small part. "
+        "Highlight the main technologies, architecture, notable features, and what makes the project interesting from a technical recruiter's perspective. "
+        "Organize your summary into clear sections: 'Technologies Used', 'Libraries/Frameworks', 'APIs', 'Architectural Patterns', 'Other Notable Details'. "
+        "This summary will be used to generate technical resume entries, so include all information that could be relevant for a technical resume."
     )
     response = openai_client.chat.completions.create(
         model=model,
@@ -107,4 +109,6 @@ def generate_project_summary(all_contents: List[str], model: str = "gpt-4o") -> 
         max_tokens=max_tokens,
         temperature=0.3
     )
-    return response.choices[0].message.content.strip() 
+    summary = response.choices[0].message.content.strip()
+    print("\n[chunking.py] ===== Project Summary Generated =====\n" + summary + "\n[chunking.py] =====================================\n")
+    return summary 
