@@ -49,7 +49,7 @@
 - [x] Run a semantic search over the project summary embeddings to shortlist top N projects.
 - [x] For each selected project, run a semantic search over chunk-level embeddings to surface the most relevant details.
 - [x] Generate a project title, 3-4 bullet summary, and include the project URL.
-- [x] Assemble and return a resume-ready object (and optionally, a PDF and alignment score).
+- [x] Assemble and return a resume-ready object (and optionally, a PDF and alignment score). (PDF generation not yet implemented)
 - [x] Calculate and return individual alignment scores for each resume object and a list of github urls.
 
 7. Schema & Pipeline Improvements
@@ -57,13 +57,19 @@
 - [ ] Ensure all new columns and indexes are documented in postgres_database.json and migrations.
 
 8. Re-Processing & Updates
-- [ ] Allow users to add new projects or re-process existing ones on demand.
-- [ ] Ensure that re-processing does not duplicate data, but updates as needed.
+- [ ] Allow users to add new projects or re-process existing ones on demand (e.g., dedicated UI for adding single repo or re-fetching all from GitHub).
+- [x] Ensure that re-processing does not duplicate data, but updates as needed (largely handled by ON CONFLICT and processing logic).
 - [x] Ensure ingestion pipeline at GitHub callback only ingests new projects not already in the DB for repeat sign-ins.
 
 9. RAG Pipeline Implementation
-- [ ] After backend and frontend are solid, implement the RAG logic for resume generation using the hybrid retrieval approach.
+- [x] After backend and frontend are solid, implement the RAG logic for resume generation using the hybrid retrieval approach.
 
 10. Refactor /api/process endpoint to start processing in the background and return immediately.
 - [x] Implement a status endpoint so the frontend can poll for processing completion.
 - [x] Update the frontend to poll /api/process_status after starting processing, and only redirect to /resume when status is "done".
+
+11. Future Enhancements & Optimizations
+- [ ] Re-format the LLM system prompt for project summarization to extract more quantitative data/metrics.
+- [ ] Implement an option for users to upload project code directly via zipped folders.
+- [ ] Further optimize backend processing pipeline (e.g., advanced multi-threading/async operations beyond current background tasks) for improved performance.
+- [ ] Implement PDF generation for resume output.
