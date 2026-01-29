@@ -1,18 +1,26 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { getSupabaseBrowserClient } from '../lib/supabaseClient';
 
 export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const router = useRouter();
-
-  const handleGithubLogin = () => {
-    const githubClientId = process.env.NEXT_PUBLIC_GITHUB_CLIENT_ID;
-    const redirectUri = 'http://localhost:8000/auth/github/callback';
-    const githubAuthUrl = `https://github.com/login/oauth/authorize?client_id=${githubClientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=read:user,user:email,repo`;
-    window.location.href = githubAuthUrl;
+  const handleGithubLogin = async () => {
+    setIsLoading(true);
+    setError(null);
+    const supabase = await getSupabaseBrowserClient();
+    const { error: authError } = await supabase.auth.signInWithOAuth({
+      provider: 'github',
+      options: {
+        redirectTo: `${window.location.origin}/home`,
+        scopes: 'read:user user:email repo',
+      },
+    });
+    if (authError) {
+      setError(authError.message);
+      setIsLoading(false);
+    }
   };
 
   return (

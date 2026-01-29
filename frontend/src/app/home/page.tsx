@@ -1,10 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
+import { getSupabaseBrowserClient } from '../../lib/supabaseClient';
 
 export default function HomePage() {
-  const searchParams = useSearchParams();
   const router = useRouter();
   const [repos, setRepos] = useState<any[]>([]);
   const [selectedRepos, setSelectedRepos] = useState<Set<number>>(new Set());
@@ -15,18 +15,50 @@ export default function HomePage() {
   const [ramble, setRamble] = useState('');
   const [rambleLoading, setRambleLoading] = useState(false);
   const [rambleMessage, setRambleMessage] = useState<string | null>(null);
+  const [tokenReady, setTokenReady] = useState(false);
 
   useEffect(() => {
-    // Extract the access token from the URL query parameters
-    const accessToken = searchParams.get('access_token');
-    if (accessToken) {
+    const initSession = async () => {
+      const supabase = await getSupabaseBrowserClient();
+      const { data } = await supabase.auth.getSession();
+      const session = data.session;
+      if (!session) {
+        router.push('/');
+        return;
+      }
+      const accessToken = session.access_token;
       sessionStorage.setItem('jwt_token', accessToken);
-      window.history.replaceState({}, document.title, '/home');
-    }
-  }, [searchParams]);
+      try {
+        const providerToken = session.provider_token;
+        if (!providerToken) {
+          setMessage('Missing GitHub provider token. Please sign in again.');
+          setTokenReady(true);
+          return;
+        }
+        const res = await fetch('http://localhost:8000/auth/supabase/session', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ provider_token: providerToken }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          setMessage(data.detail || 'Failed to initialize session.');
+        }
+      } catch {
+        setMessage('Failed to initialize session.');
+      } finally {
+        setTokenReady(true);
+      }
+    };
+    initSession();
+  }, [router]);
 
   useEffect(() => {
     const fetchRepos = async () => {
+      if (!tokenReady) return;
       setLoading(true);
       const token = sessionStorage.getItem('jwt_token');
       if (!token) {
@@ -65,7 +97,7 @@ export default function HomePage() {
       }
     };
     fetchRepos();
-  }, []);
+  }, [tokenReady]);
 
   useEffect(() => {
     // Fetch STAR ramble when selectedProjectId changes

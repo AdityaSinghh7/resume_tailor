@@ -12,7 +12,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Import routers
-from auth.github_oauth import router as auth_router
+from auth.supabase_auth import router as supabase_auth_router
 # from routes.repository_routes import router as repository_router
 from api.repositories import router as repository_router
 from api.repository_processing import router as processing_router
@@ -30,7 +30,7 @@ app.add_middleware(
 )
 
 # Include routers
-app.include_router(auth_router, prefix="/auth/github", tags=["auth"])
+app.include_router(supabase_auth_router, prefix="/auth/supabase", tags=["auth"])
 app.include_router(repository_router, prefix="/api", tags=["repositories"])
 app.include_router(processing_router, prefix="/api", tags=["processing"])
 app.include_router(rag_router, prefix="/api", tags=["rag"])

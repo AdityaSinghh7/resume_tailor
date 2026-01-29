@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 from typing import List
 from db import get_db_pool
-from auth.github_oauth import get_current_user_from_token
+from auth.supabase_auth import get_current_user_from_token
 from data_ingestion.github_ingestion import GitHubIngestionService, TEXT_FILE_EXTENSIONS
 import logging
 import base64

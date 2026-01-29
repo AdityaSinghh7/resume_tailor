@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from db import get_db_pool
-from auth.github_oauth import get_current_user_from_token
+from auth.supabase_auth import get_current_user_from_token
 from openai import OpenAI
 from dotenv import load_dotenv
 import os

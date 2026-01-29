@@ -76,14 +76,16 @@ def chunk_text(text: str, chunk_size: int = 2000) -> List[str]:
             chunks.append(para)
     return chunks
 
-def embed_texts(texts: List[str], model: str = "text-embedding-3-small") -> List[np.ndarray]:
+def embed_texts(texts: List[str], model: str = "text-embedding-3-small", batch_size: int = 96) -> List[np.ndarray]:
     """Embed a list of texts using OpenAI and return a list of np.ndarray."""
-    results = []
-    for text in texts:
-        text = text.replace("\n", " ")
-        response = openai_client.embeddings.create(input=[text], model=model)
-        embedding = np.array(response.data[0].embedding, dtype=np.float32)
-        results.append(embedding)
+    results: List[np.ndarray] = []
+    if not texts:
+        return results
+    for start in range(0, len(texts), batch_size):
+        batch = [text.replace("\n", " ") for text in texts[start:start + batch_size]]
+        response = openai_client.embeddings.create(input=batch, model=model)
+        for item in response.data:
+            results.append(np.array(item.embedding, dtype=np.float32))
     return results
 
 def generate_project_summary(all_contents: List[str], model: str = "gpt-4o") -> str:

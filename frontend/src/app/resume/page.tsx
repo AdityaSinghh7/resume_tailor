@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { getSupabaseBrowserClient } from "../../lib/supabaseClient";
 
 export default function ResumeBuilderPage() {
   const [jobDescription, setJobDescription] = useState("");
@@ -21,7 +22,14 @@ export default function ResumeBuilderPage() {
       n_projects: numProjects,
       typeofNumProjects: typeof numProjects
     });
-    const token = sessionStorage.getItem('jwt_token');
+    const supabase = await getSupabaseBrowserClient();
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token || sessionStorage.getItem('jwt_token');
+    if (!token) {
+      setError("No active session. Please sign in again.");
+      setLoading(false);
+      return;
+    }
     try {
       const response = await fetch("http://localhost:8000/api/rag_resume", {
         method: "POST",

@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Body
-from auth.jwt import get_current_user_from_token
+from auth.supabase_auth import get_current_user_from_token
 from db import get_db_pool
 from pydantic import BaseModel
 

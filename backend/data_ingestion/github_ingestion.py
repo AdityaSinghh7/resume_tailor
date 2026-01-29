@@ -62,6 +62,20 @@ class GitHubIngestionService:
             logger.info(f"Successfully fetched {len(contents)} items from {repo_name}/{path}")
             return contents
 
+    async def fetch_repository_tree(self, repo_full_name: str, ref: str) -> List[Dict[str, Any]]:
+        async with httpx.AsyncClient() as client:
+            logger.info(f"Fetching tree for {repo_full_name}@{ref}")
+            response = await client.get(
+                f"{self.base_url}/repos/{repo_full_name}/git/trees/{ref}",
+                headers=self.headers,
+                params={"recursive": "1"},
+            )
+            response.raise_for_status()
+            data = response.json()
+            tree = data.get("tree", [])
+            logger.info(f"Successfully fetched {len(tree)} tree items for {repo_full_name}@{ref}")
+            return tree
+
     async def store_project(self, user_id: int, repo_data: Dict[str, Any]) -> int:
         try:
             pool = await get_db_pool()
@@ -110,24 +124,44 @@ class GitHubIngestionService:
             logger.error(f"Error storing file metadata {abs_file_path}: {str(e)}")
             raise
 
+    async def store_files_metadata_bulk(self, rows: List[tuple]) -> None:
+        if not rows:
+            return
+        pool = await get_db_pool()
+        async with pool.acquire() as conn:
+            await conn.executemany(
+                """
+                INSERT INTO repository_files (
+                    project_id, file_path, file_type
+                ) VALUES ($1, $2, $3)
+                ON CONFLICT (project_id, file_path) DO UPDATE
+                SET file_type = EXCLUDED.file_type,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                rows
+            )
+
     async def fetch_and_store_repo_files_metadata(self, user_id: int, repo_data: dict, max_file_size: int = 200_000):
         project_id = await self.store_project(user_id, repo_data)
         repo_full_name = repo_data["full_name"]
-        async def _process_dir(repo_full_name: str, project_id: int, path: str = ""):
-            contents = await self.fetch_repository_contents(repo_full_name, path)
-            for item in contents:
-                file_path = item["path"]
-                if is_excluded_path(file_path):
-                    continue
-                if item["type"] == "file":
-                    file_type = file_path.split(".")[-1] if "." in file_path else ""
-                    file_size = item.get("size", 0)
-                    if self.is_text_file(file_path) and file_size <= max_file_size:
-                        abs_file_path = f"{repo_full_name}/{file_path}"
-                        await self.store_file_metadata(project_id, abs_file_path, file_type)
-                elif item["type"] == "dir":
-                    await _process_dir(repo_full_name, project_id, file_path)
-        await _process_dir(repo_full_name, project_id)
+        ref = repo_data.get("default_branch", "main")
+        tree = await self.fetch_repository_tree(repo_full_name, ref)
+        rows = []
+        for item in tree:
+            if item.get("type") != "blob":
+                continue
+            file_path = item.get("path", "")
+            if not file_path or is_excluded_path(file_path):
+                continue
+            if not self.is_text_file(file_path):
+                continue
+            file_size = item.get("size", 0) or 0
+            if file_size > max_file_size:
+                continue
+            file_type = file_path.split(".")[-1] if "." in file_path else ""
+            abs_file_path = f"{repo_full_name}/{file_path}"
+            rows.append((project_id, abs_file_path, file_type))
+        await self.store_files_metadata_bulk(rows)
 
 # Utility function to check if a project exists for a user
 async def project_exists(user_id: int, github_url: str):
