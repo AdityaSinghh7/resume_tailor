@@ -50,17 +50,6 @@ class GitHubIngestionService:
             logger.info(f"Successfully fetched {len(repos)} repositories")
             return repos
 
-    async def fetch_repository_contents(self, repo_name: str, path: str = "") -> List[Dict[str, Any]]:
-        async with httpx.AsyncClient() as client:
-            logger.info(f"Fetching contents for {repo_name}/{path}")
-            response = await client.get(
-                f"{self.base_url}/repos/{repo_name}/contents/{path}",
-                headers=self.headers
-            )
-            response.raise_for_status()
-            contents = response.json()
-            logger.info(f"Successfully fetched {len(contents)} items from {repo_name}/{path}")
-            return contents
 
     async def fetch_repository_tree(self, repo_full_name: str, ref: str) -> List[Dict[str, Any]]:
         async with httpx.AsyncClient() as client:
@@ -100,29 +89,7 @@ class GitHubIngestionService:
             logger.error(f"Error storing project {repo_data['html_url']}: {str(e)}")
             raise
 
-    async def store_file_metadata(self, project_id: int, abs_file_path: str, file_type: str) -> int:
-        try:
-            pool = await get_db_pool()
-            async with pool.acquire() as conn:
-                logger.info(f"Storing file metadata: {abs_file_path} (type: {file_type}) for project {project_id}")
-                file_id = await conn.fetchval("""
-                    INSERT INTO repository_files (
-                        project_id, file_path, file_type
-                    ) VALUES ($1, $2, $3)
-                    ON CONFLICT (project_id, file_path) DO UPDATE
-                    SET file_type = EXCLUDED.file_type,
-                        updated_at = CURRENT_TIMESTAMP
-                    RETURNING id
-                """,
-                    project_id,
-                    abs_file_path,
-                    file_type
-                )
-                logger.info(f"Successfully stored file metadata with ID: {file_id}")
-                return file_id
-        except Exception as e:
-            logger.error(f"Error storing file metadata {abs_file_path}: {str(e)}")
-            raise
+    
 
     async def store_files_metadata_bulk(self, rows: List[tuple]) -> None:
         if not rows:
