@@ -1,75 +1,35 @@
-1. User Authentication & Session
-- [x] Implement GitHub OAuth login (backend done).
-- [x] On successful login, upsert user info (username, GitHub user ID, access token) into the users table.
-- [x] Return a session token to the frontend for authenticated requests.
-- [x] On GitHub OAuth callback, fetch all user repositories and store their metadata (repo url, title, etc.) and file metadata (file path, file type) in the database. Do not fetch file content yet. Only files matching allowed extensions and below the size threshold are included (file size is not stored in DB).
-- [x] Ensure that on repeat sign-in, only new unique repositories are added to the DB (unique on user_id + github_url).
+1) Precompute embeddings at ingestion (offline)
 
-2. Fetch & Display User Repositories (Frontend)
-- [x] Display the list of repositories directly from the database, showing their selection state (using the 'selected' field for persistence across sign-ins).
-- [x] Use the GitHub API (with the user's access token) to fetch the list of user repositories (backend logic exists).
-- [x] Display the list on the frontend, allowing the user to select (tick) which repos to process.
-- [x] Add a 'Process Selected' button to trigger backend ingestion for selected repos.
+Repo summary embedding (one per repo)
+File embedding (one per file, e.g., file‑level summary or first N chunks)
+Chunk embeddings (already in your pipeline)
+This lets runtime queries avoid fetching raw GitHub content.
 
-3. Ingest & Process Selected Repositories (Backend)
-- [x] Add API endpoint to accept a list of selected repo names from the frontend.
-- [x] Mark selected repos as 'selected' in the projects table.
-- [x] For each selected repo:
-    - [x] Fetch repo metadata and files from GitHub.
-    - [x] Store file metadata in repository_files table.
-    - [x] Modularize file content fetching from GitHub.
-    - [x] Classify file content as code, informational, or ramble.
-    - [x] Chunk code files using TreeSitter; chunk others generically.
-    - [x] Generate embeddings for each chunk using OpenAI API.
-    - [x] Store chunks, embeddings, and metadata in file_chunks (with project association).
-    - [x] Ensure project_id is set for each chunk for easy grouping.
-- [x] Refactor pipeline for modularity and maintainability.
-- [x] Allow users to unselect repositories from the frontend and propagate this to the backend and database (set selected = false for unselected repos).
-- [x] When processing, if a repo's ramble has changed since last processing, re-run the pipeline for that repo even if already selected.
+2) Runtime query: multi‑stage search
 
-4. Hybrid Project Embedding (NEW)
-- [x] For each project, after fetching and classifying all content:
-    - [x] Feed all content (code, README, ramble, etc.) into an LLM system prompt to generate a detailed, technology-rich project summary.
-    - [x] Embed this summary and store it as a single vector per project in the vector DB.
-    - [x] Store both the project-level summary embedding and the chunk-level embeddings for hybrid retrieval.
+Stage A — Repo shortlist (fast)
+Embed the job description → vector search across repo summaries → top N repos (e.g., 10–20).
+Stage B — File shortlist within those repos
+Search file embeddings only in those repos → top M files (e.g., 30–100).
+Stage C — Chunk‑level precision
+Search chunk embeddings only inside those files → top K chunks (e.g., 10–30).
+Optional: LLM rerank on the top 20–50 chunks to improve precision.
+This narrows the search quickly and keeps latency low.
 
-5. User Ramble (STAR Write-up)
-- [x] Allow the user to optionally submit a "ramble" (project description in STAR format) for each repo (frontend + backend).
-- [x] Store each ramble as a special chunk in the file_chunks table, with metadata indicating it is a user ramble, and embed it as well.
-- [x] Ensure that if the user updates the ramble and presses process, the backend detects the change and re-processes the project.
+3) Add metadata filters to speed up and improve accuracy
 
-6. Vector Search & RAG Resume Generation
-- [x] Allow the user to upload a job description and specify N (number of projects to include).
-- [x] Create a new frontend page for job description input and resume preview, with:
-    - [x] Input box for job description
-    - [x] Output area displaying formatted resume entries (title, bullet points, github url, technologies used)
-    - [x] Ability to switch between the home page and this new page at will
-    - [x] Redirect to this page after processing is finished
-- [x] Create a modular backend RAG pipeline endpoint for job description + N → resume entries.
-- [x] Run a semantic search over the project summary embeddings to shortlist top N projects.
-- [x] For each selected project, run a semantic search over chunk-level embeddings to surface the most relevant details.
-- [x] Generate a project title, 3-4 bullet summary, and include the project URL.
-- [x] Assemble and return a resume-ready object (and optionally, a PDF and alignment score). (PDF generation not yet implemented)
-- [x] Calculate and return individual alignment scores for each resume object and a list of github urls.
+Extract keywords from job description: languages, frameworks, tools.
+Filter repos/files by language or path (e.g., src/, backend/, frontend/).
+Example: if JD mentions “React + Next.js”, prefilter to JS/TS + next/react files.
+4) Use hybrid retrieval
 
-7. Schema & Pipeline Improvements
-- [x] Add chunk_type and embedding_vector columns to file_chunks for hybrid and semantic search.
-- [ ] Ensure all new columns and indexes are documented in postgres_database.json and migrations.
+Combine vector similarity + keyword/BM25 for exact tech terms.
+Hybrid scoring often improves “right repo” selection.
+5) Cache results
 
-8. Re-Processing & Updates
-- [ ] Allow users to add new projects or re-process existing ones on demand (e.g., dedicated UI for adding single repo or re-fetching all from GitHub).
-- [x] Ensure that re-processing does not duplicate data, but updates as needed (largely handled by ON CONFLICT and processing logic).
-- [x] Ensure ingestion pipeline at GitHub callback only ingests new projects not already in the DB for repeat sign-ins.
-
-9. RAG Pipeline Implementation
-- [x] After backend and frontend are solid, implement the RAG logic for resume generation using the hybrid retrieval approach.
-
-10. Refactor /api/process endpoint to start processing in the background and return immediately.
-- [x] Implement a status endpoint so the frontend can poll for processing completion.
-- [x] Update the frontend to poll /api/process_status after starting processing, and only redirect to /resume when status is "done".
-
-11. Future Enhancements & Optimizations
-- [ ] Re-format the LLM system prompt for project summarization to extract more quantitative data/metrics.
-- [ ] Implement an option for users to upload project code directly via zipped folders.
-- [ ] Further optimize backend processing pipeline (e.g., advanced multi-threading/async operations beyond current background tasks) for improved performance.
-- [ ] Implement PDF generation for resume output.
+Cache the embedding of the job description.
+Cache top repo list for a JD so repeated edits are fast.
+Why this will be fast
+All embeddings are precomputed.
+Search runs over small subsets (repo summaries first, then file embeddings, then chunks).
+Most queries are just vector DB lookups + small rerank, so “few seconds” is realistic.
