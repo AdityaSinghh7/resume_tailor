@@ -1,5 +1,4 @@
 import httpx
-import asyncio
 from typing import List, Dict, Any
 import hashlib
 from datetime import datetime
@@ -22,8 +21,95 @@ EXCLUDED_DIRS = [
     'node_modules/', 'dist/', 'build/', 'target/', '.git/', '.venv/', '__pycache__/', '.mypy_cache/', '.pytest_cache/', '.next/', '.idea/', '.vscode/'
 ]
 
+LANGUAGE_BY_EXTENSION = {
+    "py": "python",
+    "js": "javascript",
+    "jsx": "javascript",
+    "ts": "typescript",
+    "tsx": "typescript",
+    "html": "html",
+    "css": "css",
+    "scss": "scss",
+    "json": "json",
+    "md": "markdown",
+    "yml": "yaml",
+    "yaml": "yaml",
+    "xml": "xml",
+    "sql": "sql",
+    "sh": "shell",
+    "bash": "shell",
+    "zsh": "shell",
+    "c": "c",
+    "cpp": "cpp",
+    "h": "c",
+    "hpp": "cpp",
+    "java": "java",
+    "kt": "kotlin",
+    "rs": "rust",
+    "go": "go",
+    "rb": "ruby",
+    "php": "php",
+    "swift": "swift",
+    "dart": "dart",
+    "vue": "vue",
+    "svelte": "svelte",
+    "astro": "astro",
+}
+
+PATH_BUCKETS = [
+    ("src/", "src"),
+    ("app/", "app"),
+    ("apps/", "apps"),
+    ("backend/", "backend"),
+    ("frontend/", "frontend"),
+    ("api/", "api"),
+    ("services/", "services"),
+    ("lib/", "lib"),
+    ("packages/", "packages"),
+    ("docs/", "docs"),
+    ("test/", "test"),
+    ("tests/", "test"),
+    ("scripts/", "scripts"),
+    ("config/", "config"),
+    ("infra/", "infra"),
+    (".github/", "github"),
+]
+
 def is_excluded_path(file_path: str) -> bool:
     return any(file_path.startswith(excl) for excl in EXCLUDED_DIRS)
+
+def infer_language(file_path: str) -> str:
+    if "." not in file_path:
+        return ""
+    ext = file_path.rsplit(".", 1)[-1].lower()
+    return LANGUAGE_BY_EXTENSION.get(ext, ext)
+
+def infer_path_bucket(file_path: str) -> str:
+    lowered = file_path.lower()
+    for prefix, bucket in PATH_BUCKETS:
+        if lowered.startswith(prefix):
+            return bucket
+    return "other"
+
+def extract_path_tags(file_path: str) -> List[str]:
+    lowered = file_path.lower()
+    tags = set()
+    for prefix, bucket in PATH_BUCKETS:
+        if lowered.startswith(prefix):
+            tags.add(bucket)
+    if "docker" in lowered:
+        tags.add("docker")
+    if "terraform" in lowered or "tf" in lowered:
+        tags.add("terraform")
+    if "k8s" in lowered or "kubernetes" in lowered:
+        tags.add("kubernetes")
+    if "next" in lowered:
+        tags.add("nextjs")
+    if "react" in lowered:
+        tags.add("react")
+    if "fastapi" in lowered:
+        tags.add("fastapi")
+    return sorted(tags)
 
 class GitHubIngestionService:
     def __init__(self, access_token: str):
@@ -50,6 +136,18 @@ class GitHubIngestionService:
             logger.info(f"Successfully fetched {len(repos)} repositories")
             return repos
 
+    async def fetch_repository_contents(self, repo_name: str, path: str = "") -> List[Dict[str, Any]]:
+        async with httpx.AsyncClient() as client:
+            logger.info(f"Fetching contents for {repo_name}/{path}")
+            response = await client.get(
+                f"{self.base_url}/repos/{repo_name}/contents/{path}",
+                headers=self.headers
+            )
+            response.raise_for_status()
+            contents = response.json()
+            logger.info(f"Successfully fetched contents for {repo_name}/{path}")
+            return contents
+
 
     async def fetch_repository_tree(self, repo_full_name: str, ref: str) -> List[Dict[str, Any]]:
         async with httpx.AsyncClient() as client:
@@ -73,23 +171,29 @@ class GitHubIngestionService:
                 logger.info(f"Storing project: {repo_data['html_url']} for user {user_id}")
                 project_id = await conn.fetchval("""
                     INSERT INTO projects (
-                        user_id, github_url, chunk_id
-                    ) VALUES ($1, $2, $3)
+                        user_id, github_url, chunk_id, repo_id, full_name, default_branch, pushed_at
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7)
                     ON CONFLICT (user_id, github_url) DO UPDATE
-                    SET chunk_id = EXCLUDED.chunk_id
+                    SET chunk_id = EXCLUDED.chunk_id,
+                        repo_id = EXCLUDED.repo_id,
+                        full_name = EXCLUDED.full_name,
+                        default_branch = EXCLUDED.default_branch,
+                        pushed_at = EXCLUDED.pushed_at
                     RETURNING project_id
                 """,
                     user_id,
                     repo_data["html_url"],
-                    chunk_id
+                    chunk_id,
+                    repo_data.get("id"),
+                    repo_data.get("full_name"),
+                    repo_data.get("default_branch"),
+                    repo_data.get("pushed_at")
                 )
                 logger.info(f"Successfully stored project with ID: {project_id}")
                 return project_id
         except Exception as e:
             logger.error(f"Error storing project {repo_data['html_url']}: {str(e)}")
             raise
-
-    
 
     async def store_files_metadata_bulk(self, rows: List[tuple]) -> None:
         if not rows:
@@ -99,16 +203,20 @@ class GitHubIngestionService:
             await conn.executemany(
                 """
                 INSERT INTO repository_files (
-                    project_id, file_path, file_type
-                ) VALUES ($1, $2, $3)
+                    project_id, file_path, file_type, file_size, language, path_bucket, tech_tags
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7)
                 ON CONFLICT (project_id, file_path) DO UPDATE
                 SET file_type = EXCLUDED.file_type,
+                    file_size = EXCLUDED.file_size,
+                    language = EXCLUDED.language,
+                    path_bucket = EXCLUDED.path_bucket,
+                    tech_tags = EXCLUDED.tech_tags,
                     updated_at = CURRENT_TIMESTAMP
                 """,
                 rows
             )
 
-    async def fetch_and_store_repo_files_metadata(self, user_id: int, repo_data: dict, max_file_size: int = 200_000):
+    async def fetch_and_store_repo_files_metadata(self, user_id: int, repo_data: dict, max_file_size: int = 200_000) -> int:
         project_id = await self.store_project(user_id, repo_data)
         repo_full_name = repo_data["full_name"]
         ref = repo_data.get("default_branch", "main")
@@ -126,9 +234,13 @@ class GitHubIngestionService:
             if file_size > max_file_size:
                 continue
             file_type = file_path.split(".")[-1] if "." in file_path else ""
+            language = infer_language(file_path)
+            path_bucket = infer_path_bucket(file_path)
+            tech_tags = extract_path_tags(file_path)
             abs_file_path = f"{repo_full_name}/{file_path}"
-            rows.append((project_id, abs_file_path, file_type))
+            rows.append((project_id, abs_file_path, file_type, file_size, language, path_bucket, tech_tags))
         await self.store_files_metadata_bulk(rows)
+        return project_id
 
 # Utility function to check if a project exists for a user
 async def project_exists(user_id: int, github_url: str):

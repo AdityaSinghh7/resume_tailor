@@ -15,6 +15,8 @@ class RepositoryProcessingService:
     def __init__(self, access_token: str):
         self.ingestion_service = GitHubIngestionService(access_token)
         self.max_fetch_concurrency = int(os.getenv("GITHUB_FETCH_CONCURRENCY", "8"))
+        self.max_file_summary_chars = int(os.getenv("FILE_SUMMARY_MAX_CHARS", "4000"))
+        self.max_file_summary_chunks = int(os.getenv("FILE_SUMMARY_MAX_CHUNKS", "8"))
 
     async def process_repositories(self, user_id: int, repo_ids: List[int], conn) -> None:
         projects = await conn.fetch(
@@ -44,7 +46,7 @@ class RepositoryProcessingService:
                 content_updated = True
             # Process files
             files = await conn.fetch(
-                "SELECT id, file_path, file_type, content_hash FROM repository_files WHERE project_id = $1",
+                "SELECT id, file_path, file_type, content_hash, tech_tags FROM repository_files WHERE project_id = $1",
                 project_id
             )
             chunk_counts = await conn.fetch(
@@ -93,15 +95,36 @@ class RepositoryProcessingService:
                         """,
                         file_id, project_id, idx, chunk, str(embedding.tolist()), content_type
                     )
+                file_summary = self._build_file_summary(chunks)
+                if file_summary:
+                    file_embedding = embed_texts([file_summary])[0]
+                    existing_tags = file_row["tech_tags"] or []
+                    merged_tags = self._merge_tags(existing_tags, self._extract_tech_tags(file_summary, abs_file_path, file_type))
+                    await conn.execute(
+                        """
+                        UPDATE repository_files
+                        SET summary = $1,
+                            summary_embedding_vector = $2,
+                            tech_tags = $3
+                        WHERE id = $4
+                        """,
+                        file_summary, str(file_embedding.tolist()), merged_tags, file_id
+                    )
                 content_updated = True
             # After processing all files and rambles, generate and store project summary and embedding
             # Gather all chunk contents for this project
             if content_updated:
-                chunk_rows = await conn.fetch(
-                    "SELECT content FROM file_chunks WHERE project_id = $1 ORDER BY chunk_index ASC",
+                file_summary_rows = await conn.fetch(
+                    "SELECT summary FROM repository_files WHERE project_id = $1 AND summary IS NOT NULL",
                     project_id
                 )
-                all_contents = [row["content"] for row in chunk_rows if row["content"]]
+                all_contents = [row["summary"] for row in file_summary_rows if row["summary"]]
+                if not all_contents:
+                    chunk_rows = await conn.fetch(
+                        "SELECT content FROM file_chunks WHERE project_id = $1 ORDER BY chunk_index ASC",
+                        project_id
+                    )
+                    all_contents = [row["content"] for row in chunk_rows if row["content"]]
                 if all_contents:
                     summary = generate_project_summary(all_contents)
                     summary_embedding = embed_texts([summary])[0]
@@ -123,3 +146,85 @@ class RepositoryProcessingService:
         except Exception as e:
             logging.error(f"Error fetching content for {abs_file_path}: {e}")
         return None 
+
+    def _build_file_summary(self, chunks: List[str]) -> str:
+        if not chunks:
+            return ""
+        selected = chunks[: self.max_file_summary_chunks]
+        summary = "\n".join(selected)
+        if len(summary) > self.max_file_summary_chars:
+            summary = summary[: self.max_file_summary_chars]
+        return summary
+
+    def _extract_tech_tags(self, text: str, file_path: str, file_type: Optional[str]) -> List[str]:
+        lowered = f"{file_path}\n{text}".lower()
+        tag_map = {
+            "next.js": "nextjs",
+            "nextjs": "nextjs",
+            "react": "react",
+            "vue": "vue",
+            "svelte": "svelte",
+            "angular": "angular",
+            "node": "node",
+            "express": "express",
+            "fastapi": "fastapi",
+            "django": "django",
+            "flask": "flask",
+            "graphql": "graphql",
+            "rest": "rest",
+            "postgres": "postgres",
+            "postgresql": "postgres",
+            "mysql": "mysql",
+            "sqlite": "sqlite",
+            "mongodb": "mongodb",
+            "redis": "redis",
+            "supabase": "supabase",
+            "docker": "docker",
+            "kubernetes": "kubernetes",
+            "k8s": "kubernetes",
+            "terraform": "terraform",
+            "aws": "aws",
+            "gcp": "gcp",
+            "azure": "azure",
+            "openai": "openai",
+            "langchain": "langchain",
+            "pytorch": "pytorch",
+            "tensorflow": "tensorflow",
+            "numpy": "numpy",
+            "pandas": "pandas",
+            "tailwind": "tailwind",
+            "chakra": "chakra",
+            "mui": "mui",
+            "prisma": "prisma",
+            "drizzle": "drizzle",
+            "vite": "vite",
+            "webpack": "webpack",
+            "turborepo": "turborepo",
+            "bun": "bun",
+            "deno": "deno",
+            "typescript": "typescript",
+            "javascript": "javascript",
+            "python": "python",
+            "go": "go",
+            "rust": "rust",
+            "java": "java",
+            "kotlin": "kotlin",
+            "swift": "swift",
+            "dart": "dart",
+            "c++": "cpp",
+            "cpp": "cpp",
+            "c#": "csharp",
+            "csharp": "csharp",
+        }
+        found = set()
+        for needle, tag in tag_map.items():
+            if needle in lowered:
+                found.add(tag)
+        if file_type:
+            found.add(file_type.lower())
+        return sorted(found)
+
+    def _merge_tags(self, existing: List[str], new: List[str]) -> List[str]:
+        merged = set(existing or [])
+        merged.update(new or [])
+        return sorted(merged)

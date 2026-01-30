@@ -7,6 +7,7 @@ from models import UserCreate
 from auth.jwt import create_access_token, verify_access_token
 import logging
 from data_ingestion.github_ingestion import GitHubIngestionService, project_exists
+from api.processing_service import RepositoryProcessingService
 import asyncio
 
 router = APIRouter()
@@ -52,7 +53,13 @@ async def fetch_and_store_all_repos(user_id, access_code):
                     ingestion_service.fetch_and_store_repo_files_metadata(user_id, repo, max_file_size=200_000)
                 )
         if tasks:
-            await asyncio.gather(*tasks)
+            repo_ids = await asyncio.gather(*tasks)
+            repo_ids = [repo_id for repo_id in repo_ids if repo_id]
+            if repo_ids:
+                processing_service = RepositoryProcessingService(access_code)
+                pool = await get_db_pool()
+                async with pool.acquire() as conn:
+                    await processing_service.process_repositories(user_id, repo_ids, conn)
     except Exception as e:
         logging.error(f"Error during repo metadata ingestion: {e}")
 

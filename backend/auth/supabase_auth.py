@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 
 from db import get_db_pool
 from data_ingestion.github_ingestion import GitHubIngestionService, project_exists
+from api.processing_service import RepositoryProcessingService
 
 logger = logging.getLogger(__name__)
 
@@ -142,7 +143,13 @@ async def _fetch_and_store_all_repos(user_id: int, access_token: str) -> None:
                     ingestion_service.fetch_and_store_repo_files_metadata(user_id, repo, max_file_size=200_000)
                 )
         if tasks:
-            await asyncio.gather(*tasks)
+            repo_ids = await asyncio.gather(*tasks)
+            repo_ids = [repo_id for repo_id in repo_ids if repo_id]
+            if repo_ids:
+                processing_service = RepositoryProcessingService(access_token)
+                pool = await get_db_pool()
+                async with pool.acquire() as conn:
+                    await processing_service.process_repositories(user_id, repo_ids, conn)
     except Exception as e:
         logger.error("Error during repo metadata ingestion: %s", e)
 
