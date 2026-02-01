@@ -19,10 +19,10 @@ ADD COLUMN IF NOT EXISTS tech_tags TEXT[];
 
 -- Vector indexes for fast similarity search
 CREATE INDEX IF NOT EXISTS idx_projects_summary_embedding_vector
-ON projects USING ivfflat (summary_embedding_vector vector_cosine_ops);
+ON projects USING hnsw (summary_embedding_vector vector_cosine_ops);
 
 CREATE INDEX IF NOT EXISTS idx_repository_files_summary_embedding_vector
-ON repository_files USING ivfflat (summary_embedding_vector vector_cosine_ops);
+ON repository_files USING hnsw (summary_embedding_vector vector_cosine_ops);
 
 -- Unique guard for repo ids (nullable-safe)
 CREATE UNIQUE INDEX IF NOT EXISTS idx_projects_user_repo_id

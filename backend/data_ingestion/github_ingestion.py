@@ -1,7 +1,7 @@
 import httpx
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import hashlib
-from datetime import datetime
+from datetime import datetime, timezone
 from db import get_db_pool
 import logging
 
@@ -111,6 +111,18 @@ def extract_path_tags(file_path: str) -> List[str]:
         tags.add("fastapi")
     return sorted(tags)
 
+def parse_github_timestamp(value: str) -> Optional[datetime]:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            return parsed
+        return parsed.astimezone(timezone.utc).replace(tzinfo=None)
+    except ValueError:
+        logger.warning("Unable to parse GitHub timestamp: %s", value)
+        return None
+
 class GitHubIngestionService:
     def __init__(self, access_token: str):
         self.access_token = access_token
@@ -187,7 +199,7 @@ class GitHubIngestionService:
                     repo_data.get("id"),
                     repo_data.get("full_name"),
                     repo_data.get("default_branch"),
-                    repo_data.get("pushed_at")
+                    parse_github_timestamp(repo_data.get("pushed_at"))
                 )
                 logger.info(f"Successfully stored project with ID: {project_id}")
                 return project_id
