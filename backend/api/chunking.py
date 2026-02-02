@@ -42,7 +42,14 @@ for ext, lang_name in EXTENSION_LANGUAGE_MAP.items():
     except Exception:
         pass
 
-def chunk_code(code: str, file_type: str, chunk_size: int = 2000) -> List[str]:
+DEFAULT_CHUNK_SIZE = int(os.getenv("EMBED_CHUNK_SIZE", "1000"))
+
+def _split_large_chunk(text: str, chunk_size: int) -> List[str]:
+    if len(text) <= chunk_size:
+        return [text]
+    return [text[i:i+chunk_size] for i in range(0, len(text), chunk_size)]
+
+def chunk_code(code: str, file_type: str, chunk_size: int = DEFAULT_CHUNK_SIZE) -> List[str]:
     """Chunk code using TreeSitter by function/class for supported languages, else by size."""
     ext = file_type.lower()
     lang = TREE_SITTER_LANGUAGES.get(ext)
@@ -59,19 +66,18 @@ def chunk_code(code: str, file_type: str, chunk_size: int = 2000) -> List[str]:
         for node in root.children:
             if node.type in node_types:
                 chunk = code[node.start_byte:node.end_byte]
-                chunks.append(chunk)
+                chunks.extend(_split_large_chunk(chunk, chunk_size))
     if not chunks:
         return [code[i:i+chunk_size] for i in range(0, len(code), chunk_size)]
     return chunks
 
-def chunk_text(text: str, chunk_size: int = 2000) -> List[str]:
+def chunk_text(text: str, chunk_size: int = DEFAULT_CHUNK_SIZE) -> List[str]:
     """Chunk text by paragraphs or fixed size."""
     paragraphs = [p for p in text.split('\n\n') if p.strip()]
     chunks = []
     for para in paragraphs:
         if len(para) > chunk_size:
-            for i in range(0, len(para), chunk_size):
-                chunks.append(para[i:i+chunk_size])
+            chunks.extend(_split_large_chunk(para, chunk_size))
         else:
             chunks.append(para)
     return chunks
