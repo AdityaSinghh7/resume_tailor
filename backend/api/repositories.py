@@ -9,27 +9,6 @@ router = APIRouter()
 class StarRambleUpdate(BaseModel):
     star_ramble: str
 
-@router.get("/repositories")
-async def get_user_repositories(authorization: dict = Depends(get_current_user_from_token)):
-    user_id = authorization["uid"]
-    pool = await get_db_pool()
-    async with pool.acquire() as conn:
-        repos = await conn.fetch(
-            """
-            SELECT p.project_id, p.github_url, p.chunk_id, p.selected,
-                   p.full_name, p.default_branch, p.pushed_at,
-                   (p.summary_embedding_vector IS NOT NULL) AS embeddings_ready,
-                   COUNT(rf.id) as file_count,
-                   COUNT(fc.id) as chunk_count
-            FROM projects p
-            LEFT JOIN repository_files rf ON p.project_id = rf.project_id
-            LEFT JOIN file_chunks fc ON rf.id = fc.file_id
-            WHERE p.user_id = $1
-            GROUP BY p.project_id, p.github_url, p.chunk_id, p.selected, p.full_name, p.default_branch, p.pushed_at, p.summary_embedding_vector
-            ORDER BY p.project_id DESC
-            """, user_id
-        )
-        return [dict(repo) for repo in repos]
 
 @router.get("/github_repos")
 async def fetch_github_repositories(authorization: dict = Depends(get_current_user_from_token)):
