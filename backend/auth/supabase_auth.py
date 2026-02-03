@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 
 from db import get_db_pool
-from data_ingestion.github_ingestion import GitHubIngestionService, project_exists
+from data_ingestion.github_ingestion import GitHubIngestionService
 from api.processing_service import RepositoryProcessingService
 
 logger = logging.getLogger(__name__)
@@ -132,16 +132,12 @@ async def _fetch_and_store_all_repos(user_id: int, access_token: str) -> None:
         ingestion_service = GitHubIngestionService(access_token)
         repos = await ingestion_service.fetch_user_repositories()
         public_repos = [repo for repo in repos if not repo.get("private", False)]
-        tasks = []
-        for repo in public_repos:
-            exists = await project_exists(user_id, repo["html_url"])
-            if exists:
-                logger.info("Skipping existing project for user %s: %s", user_id, repo["html_url"])
-            else:
-                logger.info("Ingesting new project for user %s: %s", user_id, repo["html_url"])
-                tasks.append(
-                    ingestion_service.fetch_and_store_repo_files_metadata(user_id, repo, max_file_size=200_000)
-                )
+        tasks = [
+            ingestion_service.fetch_and_store_repo_files_metadata(
+                user_id, repo, max_file_size=200_000, skip_if_files_exist=True
+            )
+            for repo in public_repos
+        ]
         if tasks:
             repo_ids = await asyncio.gather(*tasks)
             repo_ids = [repo_id for repo_id in repo_ids if repo_id]

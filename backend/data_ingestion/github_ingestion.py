@@ -228,8 +228,17 @@ class GitHubIngestionService:
                 rows
             )
 
-    async def fetch_and_store_repo_files_metadata(self, user_id: int, repo_data: dict, max_file_size: int = 200_000) -> int:
+    async def fetch_and_store_repo_files_metadata(self, user_id: int, repo_data: dict, max_file_size: int = 200_000, skip_if_files_exist: bool = True) -> int:
         project_id = await self.store_project(user_id, repo_data)
+        if skip_if_files_exist:
+            pool = await get_db_pool()
+            async with pool.acquire() as conn:
+                exists = await conn.fetchval(
+                    "SELECT 1 FROM repository_files WHERE project_id = $1 LIMIT 1",
+                    project_id
+                )
+            if exists:
+                return project_id
         repo_full_name = repo_data["full_name"]
         ref = repo_data.get("default_branch", "main")
         tree = await self.fetch_repository_tree(repo_full_name, ref)

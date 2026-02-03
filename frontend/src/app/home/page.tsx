@@ -68,7 +68,7 @@ export default function HomePage() {
         return;
       }
       try {
-        const res = await fetch('http://localhost:8000/api/repositories', {
+        const res = await fetch('http://localhost:8000/api/github_repos', {
           headers: {
             'Authorization': `Bearer ${token}`,
           },
