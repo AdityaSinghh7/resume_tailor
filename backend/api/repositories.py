@@ -9,6 +9,58 @@ router = APIRouter()
 class StarRambleUpdate(BaseModel):
     star_ramble: str
 
+@router.get("/ingested_files")
+async def get_ingested_files(authorization: dict = Depends(get_current_user_from_token)):
+    user_id = authorization["uid"]
+    pool = await get_db_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT p.project_id,
+                   p.github_url,
+                   p.full_name,
+                   p.selected,
+                   (p.summary_embedding_vector IS NOT NULL) AS embeddings_ready,
+                   rf.id AS file_id,
+                   rf.file_path,
+                   rf.language,
+                   rf.path_bucket
+            FROM projects p
+            LEFT JOIN repository_files rf ON p.project_id = rf.project_id
+            WHERE p.user_id = $1
+            ORDER BY p.project_id DESC, rf.file_path ASC
+            """,
+            user_id,
+        )
+
+    grouped = {}
+    for row in rows:
+        project_id = row["project_id"]
+        repo = grouped.get(project_id)
+        if repo is None:
+            repo = {
+                "project_id": project_id,
+                "github_url": row["github_url"],
+                "full_name": row["full_name"],
+                "selected": row["selected"],
+                "embeddings_ready": row["embeddings_ready"],
+                "file_count": 0,
+                "files": [],
+            }
+            grouped[project_id] = repo
+        if row["file_id"] is not None:
+            repo["file_count"] += 1
+            repo["files"].append(
+                {
+                    "id": row["file_id"],
+                    "file_path": row["file_path"],
+                    "language": row["language"],
+                    "path_bucket": row["path_bucket"],
+                }
+            )
+
+    return list(grouped.values())
+
 
 @router.get("/github_repos")
 async def fetch_github_repositories(authorization: dict = Depends(get_current_user_from_token)):

@@ -1,21 +1,45 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getSupabaseBrowserClient } from '../../lib/supabaseClient';
 
+type FileItem = {
+  id: number;
+  file_path: string;
+  language: string | null;
+  path_bucket: string | null;
+};
+
+type RepoItem = {
+  project_id: number;
+  github_url: string;
+  full_name: string | null;
+  selected: boolean;
+  embeddings_ready: boolean;
+  file_count: number;
+  files: FileItem[];
+};
+
+type ResumeEntry = {
+  title: string;
+  github_url: string;
+  bullets: string[];
+  technologies: string[];
+  alignment_score?: number;
+};
+
 export default function HomePage() {
   const router = useRouter();
-  const [repos, setRepos] = useState<any[]>([]);
-  const [selectedRepos, setSelectedRepos] = useState<Set<number>>(new Set());
-  const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [processing, setProcessing] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const [ramble, setRamble] = useState('');
-  const [rambleLoading, setRambleLoading] = useState(false);
-  const [rambleMessage, setRambleMessage] = useState<string | null>(null);
+  const [repos, setRepos] = useState<RepoItem[]>([]);
   const [tokenReady, setTokenReady] = useState(false);
+  const [loadingRepos, setLoadingRepos] = useState(true);
+  const [jobDescription, setJobDescription] = useState('');
+  const [numProjects, setNumProjects] = useState(3);
+  const [results, setResults] = useState<ResumeEntry[]>([]);
+  const [loadingResults, setLoadingResults] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const initSession = async () => {
@@ -38,7 +62,7 @@ export default function HomePage() {
         const res = await fetch('http://localhost:8000/auth/supabase/session', {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${accessToken}`,
+            Authorization: `Bearer ${accessToken}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({ provider_token: providerToken }),
@@ -57,272 +81,196 @@ export default function HomePage() {
   }, [router]);
 
   useEffect(() => {
-    const fetchRepos = async () => {
-      if (!tokenReady) return;
-      setLoading(true);
+    if (!tokenReady) return;
+
+    let cancelled = false;
+    let pollTimer: NodeJS.Timeout | null = null;
+
+    const fetchRepoNames = async (token: string) => {
+      await fetch('http://localhost:8000/api/github_repos', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    };
+
+    const fetchIngestedFiles = async (token: string) => {
+      try {
+        const res = await fetch('http://localhost:8000/api/ingested_files', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled && Array.isArray(data)) {
+          setRepos(data);
+        }
+      } finally {
+        if (!cancelled) setLoadingRepos(false);
+      }
+    };
+
+    const run = async () => {
       const token = sessionStorage.getItem('jwt_token');
       if (!token) {
-        setMessage('No token found. Please log in again.');
-        setRepos([]); // Defensive: always set to array
-        setLoading(false);
+        setError('No token found. Please log in again.');
+        setLoadingRepos(false);
         return;
       }
-      try {
-        const res = await fetch('http://localhost:8000/api/github_repos', {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-        });
-        if (!res.ok) {
-          setRepos([]); // Defensive: always set to array
-          setMessage('Error fetching repositories.');
-          setLoading(false);
-          return;
-        }
-        const data = await res.json();
-        if (Array.isArray(data)) {
-          setRepos(data);
-          // Set selectedRepos to those with selected = true
-          const initiallySelected = new Set<number>(data.filter((repo: any) => repo.selected).map((repo: any) => repo.project_id));
-          setSelectedRepos(initiallySelected);
-        } else {
-          setRepos([]); // Defensive: always set to array
-          setMessage('Unexpected response from server.');
-        }
-      } catch (err) {
-        setRepos([]); // Defensive: always set to array
-        setMessage('Error fetching repositories.');
-      } finally {
-        setLoading(false);
-      }
+      await fetchRepoNames(token);
+      await fetchIngestedFiles(token);
+      pollTimer = setInterval(() => {
+        fetchIngestedFiles(token);
+      }, 4000);
     };
-    fetchRepos();
+
+    run();
+
+    return () => {
+      cancelled = true;
+      if (pollTimer) clearInterval(pollTimer);
+    };
   }, [tokenReady]);
 
-  useEffect(() => {
-    // Fetch STAR ramble when selectedProjectId changes
-    if (selectedProjectId === null) {
-      setRamble('');
+  const totalFiles = useMemo(() => repos.reduce((acc, repo) => acc + repo.file_count, 0), [repos]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoadingResults(true);
+    setError(null);
+    setResults([]);
+
+    const token = sessionStorage.getItem('jwt_token');
+    if (!token) {
+      setError('No active session. Please sign in again.');
+      setLoadingResults(false);
       return;
     }
-    const fetchRamble = async () => {
-      setRambleLoading(true);
-      const token = sessionStorage.getItem('jwt_token');
-      try {
-        const res = await fetch(`http://localhost:8000/api/repositories/${selectedProjectId}/star_ramble`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setRamble(data.star_ramble || '');
-        } else {
-          setRamble('');
-        }
-      } catch {
-        setRamble('');
-      } finally {
-        setRambleLoading(false);
-      }
-    };
-    fetchRamble();
-  }, [selectedProjectId]);
 
-  const handleCheckbox = (projectId: number) => {
-    setSelectedRepos(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(projectId)) {
-        newSet.delete(projectId);
-      } else {
-        newSet.add(projectId);
-      }
-      return newSet;
-    });
-  };
-
-  const handleSelectRamble = (projectId: number) => {
-    setSelectedProjectId(projectId);
-    setRambleMessage(null);
-  };
-
-  const handleProcessSelected = async () => {
-    setProcessing(true);
-    setMessage(null);
-    const token = sessionStorage.getItem('jwt_token');
     try {
-      const res = await fetch('http://localhost:8000/api/process', {
+      const response = await fetch('http://localhost:8000/api/rag_resume', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ repo_ids: Array.from(selectedRepos) }),
+        body: JSON.stringify({
+          job_description: jobDescription,
+          n_projects: Number(numProjects),
+        }),
       });
-      const data = await res.json();
-      setMessage(data.message || 'Processing started!');
-      if (res.ok) {
-        // Poll for status
-        let pollInterval: NodeJS.Timeout;
-        const pollStatus = async () => {
-          try {
-            const statusRes = await fetch('http://localhost:8000/api/process_status', {
-              headers: { 'Authorization': `Bearer ${token}` },
-            });
-            const statusData = await statusRes.json();
-            setMessage(statusData.message || 'Processing...');
-            if (statusData.status === 'done') {
-              clearInterval(pollInterval);
-              setProcessing(false);
-              setTimeout(() => {
-                router.push('/resume');
-              }, 1200);
-            } else if (statusData.status === 'error') {
-              clearInterval(pollInterval);
-              setProcessing(false);
-              setMessage('Error: ' + (statusData.message || 'Processing failed.'));
-            }
-          } catch (e) {
-            clearInterval(pollInterval);
-            setProcessing(false);
-            setMessage('Error polling processing status.');
-          }
-        };
-        pollInterval = setInterval(pollStatus, 900);
-        pollStatus(); // initial call
-      }
-    } catch (err) {
-      setMessage('Error processing repositories.');
-      setProcessing(false);
-    }
-  };
 
-  const handleSaveRamble = async () => {
-    if (!selectedProjectId) return;
-    setRambleMessage(null);
-    setRambleLoading(true);
-    const token = sessionStorage.getItem('jwt_token');
-    try {
-      const res = await fetch(`http://localhost:8000/api/repositories/${selectedProjectId}/star_ramble`, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ star_ramble: ramble }),
-      });
-      if (res.ok) {
-        setRambleMessage('Ramble saved!');
-      } else {
-        setRambleMessage('Failed to save ramble.');
+      if (!response.ok) {
+        throw new Error('Failed to fetch recommendations');
       }
-    } catch {
-      setRambleMessage('Failed to save ramble.');
+
+      const data = await response.json();
+      setResults(data.entries || []);
+    } catch (err: any) {
+      setError(err.message || 'Failed to fetch recommendations.');
     } finally {
-      setRambleLoading(false);
+      setLoadingResults(false);
     }
   };
 
   return (
-    <main className="min-h-screen bg-gray-50 p-8">
-      <div className="max-w-6xl mx-auto">
-        <div className="bg-white rounded-lg shadow-lg p-8 flex flex-col md:flex-row gap-8">
-          {/* Left: Repo List */}
-          <div className="md:w-1/2 w-full">
-            <h1 className="text-3xl font-bold text-gray-900 mb-4">
-              Welcome to Resume Tailor!
-            </h1>
-            <p className="text-gray-600 mb-6">
-              Select repositories to process and click a project to view/edit its STAR ramble.
-            </p>
-            {loading ? (
-              <div className="text-gray-500">Loading repositories...</div>
-            ) : (
-              <ul className="divide-y divide-gray-200 mb-6">
-                {repos.length === 0 ? (
-                  <li className="py-4 text-gray-500">No repositories found.</li>
-                ) : (
-                  repos.map((repo: any) => (
-                    <li key={repo.project_id} className="flex items-center py-3 group cursor-pointer">
-                      <input
-                        type="checkbox"
-                        className="mr-2 h-5 w-5 text-blue-600 rounded"
-                        checked={selectedRepos.has(repo.project_id)}
-                        onChange={() => handleCheckbox(repo.project_id)}
-                        onClick={e => e.stopPropagation()}
-                      />
-                      <span
-                        className={`font-medium flex-1 px-1 rounded transition-colors duration-150 ${selectedProjectId === repo.project_id ? 'font-bold bg-blue-50 text-blue-800' : 'text-gray-800'}`}
-                        onClick={() => handleSelectRamble(repo.project_id)}
-                      >
-                        {repo.github_url}
+    <main className="min-h-screen bg-stone-100 text-stone-900">
+      <div className="mx-auto grid max-w-7xl grid-cols-1 gap-6 p-6 md:grid-cols-[360px_1fr]">
+        <aside className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
+          <h1 className="text-2xl font-bold">Ingested Files</h1>
+          <p className="mt-1 text-sm text-stone-600">{repos.length} repos · {totalFiles} files</p>
+          {loadingRepos ? (
+            <div className="mt-4 text-sm text-stone-500">Loading repositories...</div>
+          ) : repos.length === 0 ? (
+            <div className="mt-4 text-sm text-stone-500">No repositories found yet.</div>
+          ) : (
+            <div className="mt-4 space-y-3 overflow-y-auto pr-1" style={{ maxHeight: '78vh' }}>
+              {repos.map((repo) => (
+                <details key={repo.project_id} className="rounded-lg border border-stone-200 bg-stone-50">
+                  <summary className="cursor-pointer list-none px-3 py-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-semibold text-stone-900">{repo.full_name || repo.github_url}</p>
+                        <p className="text-xs text-stone-600">{repo.file_count} files indexed</p>
+                      </div>
+                      <span className={`rounded-full px-2 py-0.5 text-xs ${repo.embeddings_ready ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                        {repo.embeddings_ready ? 'Ready' : 'Processing'}
                       </span>
-                      <span className="ml-2">
-                        {repo.selected ? (
-                          <span className="inline-block px-2 py-0.5 text-xs bg-green-100 text-green-700 rounded-full ml-2">Selected</span>
-                        ) : (
-                          <span className="inline-block px-2 py-0.5 text-xs bg-gray-200 text-gray-500 rounded-full ml-2">Not Selected</span>
-                        )}
-                      </span>
-                      <span className="ml-auto text-sm text-gray-400">{repo.file_count} files</span>
-                    </li>
-                  ))
+                    </div>
+                  </summary>
+                  <div className="max-h-64 overflow-y-auto border-t border-stone-200 bg-white px-3 py-2 text-xs">
+                    {repo.files.length === 0 ? (
+                      <p className="text-stone-500">Files are still being ingested...</p>
+                    ) : (
+                      repo.files.map((file) => (
+                        <div key={file.id} className="mb-1 rounded border border-stone-100 bg-stone-50 px-2 py-1">
+                          <p className="truncate text-stone-800">{file.file_path}</p>
+                          <p className="text-[11px] text-stone-500">{file.language || 'unknown'} · {file.path_bucket || 'other'}</p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </details>
+              ))}
+            </div>
+          )}
+        </aside>
+
+        <section className="rounded-2xl border border-stone-200 bg-white p-6 shadow-sm">
+          <h2 className="text-2xl font-bold">Job Match Recommendations</h2>
+          <p className="mt-1 text-sm text-stone-600">Paste a job description to get recommended projects and bullet points.</p>
+
+          <form onSubmit={handleSubmit} className="mt-5 space-y-4">
+            <textarea
+              className="min-h-[180px] w-full rounded-xl border border-stone-300 bg-stone-50 p-4 text-sm outline-none ring-0 focus:border-blue-500"
+              placeholder="Paste job description here..."
+              value={jobDescription}
+              onChange={(e) => setJobDescription(e.target.value)}
+              required
+            />
+            <div className="flex items-center gap-3">
+              <label className="text-sm font-medium text-stone-700">Top projects:</label>
+              <input
+                type="number"
+                min={1}
+                max={10}
+                value={numProjects}
+                onChange={(e) => setNumProjects(Number(e.target.value))}
+                className="w-16 rounded-md border border-stone-300 px-2 py-1 text-sm"
+              />
+              <button
+                type="submit"
+                disabled={loadingResults}
+                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {loadingResults ? 'Finding Matches...' : 'Find Matches'}
+              </button>
+            </div>
+          </form>
+
+          {message && <div className="mt-4 rounded bg-blue-100 p-2 text-sm text-blue-800">{message}</div>}
+          {error && <div className="mt-4 rounded bg-red-100 p-2 text-sm text-red-700">{error}</div>}
+
+          <div className="mt-6 space-y-4">
+            {results.map((entry, idx) => (
+              <article key={`${entry.github_url}-${idx}`} className="rounded-xl border border-stone-200 bg-stone-50 p-4">
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <h3 className="text-lg font-semibold text-stone-900">{entry.title}</h3>
+                  <a href={entry.github_url} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-700 hover:underline">
+                    GitHub
+                  </a>
+                </div>
+                {typeof entry.alignment_score !== 'undefined' && (
+                  <p className="mb-2 text-xs text-stone-500">Alignment score: {entry.alignment_score.toFixed(3)}</p>
                 )}
-              </ul>
-            )}
-            <button
-              onClick={handleProcessSelected}
-              className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
-              disabled={processing || selectedRepos.size === 0}
-            >
-              {processing ? 'Processing...' : 'Process Selected'}
-            </button>
-            {processing && (
-              <div className="flex justify-center items-center mt-4">
-                <svg className="animate-spin h-8 w-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
-                </svg>
-                <span className="ml-3 text-blue-700">Processing repositories, please wait...</span>
-              </div>
-            )}
-            {message && (
-              <div className="mt-4 text-blue-700 bg-blue-100 p-2 rounded">{message}</div>
-            )}
+                <ul className="list-disc space-y-1 pl-5 text-sm text-stone-800">
+                  {entry.bullets.map((bullet, i) => (
+                    <li key={i}>{bullet}</li>
+                  ))}
+                </ul>
+                <p className="mt-3 text-xs text-stone-500">Technologies: {entry.technologies.join(', ')}</p>
+              </article>
+            ))}
           </div>
-          {/* Right: STAR Ramble */}
-          <div className="md:w-1/2 w-full">
-            {selectedProjectId ? (
-              <>
-                <h2 className="text-xl font-semibold text-gray-800 mb-2">STAR Ramble for Selected Project</h2>
-                <p className="text-gray-500 mb-2 text-sm">
-                  Write or edit your STAR format (Situation, Task, Action, Result) ramble for this project.
-                </p>
-                <textarea
-                  className="w-full min-h-[220px] border border-gray-300 rounded p-3 text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-400"
-                  placeholder={`Situation: What was the context?\nTask: What was your responsibility?\nAction: What did you do?\nResult: What was the outcome?`}
-                  value={ramble}
-                  onChange={e => setRamble(e.target.value)}
-                  disabled={rambleLoading}
-                />
-                <button
-                  onClick={handleSaveRamble}
-                  className="mt-3 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
-                  disabled={rambleLoading}
-                >
-                  {rambleLoading ? 'Saving...' : 'Save Ramble'}
-                </button>
-                {rambleMessage && (
-                  <div className="mt-2 text-green-700 bg-green-100 p-2 rounded">{rambleMessage}</div>
-                )}
-                {rambleLoading && <div className="text-gray-400 mt-2">Loading ramble...</div>}
-              </>
-            ) : (
-              <div className="text-gray-400 italic mt-12">Select a project to view or edit its STAR ramble.</div>
-            )}
-          </div>
-        </div>
+        </section>
       </div>
     </main>
   );
-} 
+}

@@ -228,7 +228,7 @@ class GitHubIngestionService:
                 rows
             )
 
-    async def fetch_and_store_repo_files_metadata(self, user_id: int, repo_data: dict, max_file_size: int = 200_000, skip_if_files_exist: bool = True) -> int:
+    async def fetch_and_store_repo_files_metadata(self, user_id: int, repo_data: dict, max_file_size: int = 200_000, skip_if_files_exist: bool = True) -> Optional[int]:
         project_id = await self.store_project(user_id, repo_data)
         if skip_if_files_exist:
             pool = await get_db_pool()
@@ -238,7 +238,7 @@ class GitHubIngestionService:
                     project_id
                 )
             if exists:
-                return project_id
+                return None
         repo_full_name = repo_data["full_name"]
         ref = repo_data.get("default_branch", "main")
         tree = await self.fetch_repository_tree(repo_full_name, ref)
@@ -262,6 +262,5 @@ class GitHubIngestionService:
             rows.append((project_id, abs_file_path, file_type, file_size, language, path_bucket, tech_tags))
         await self.store_files_metadata_bulk(rows)
         return project_id
-
 
 
