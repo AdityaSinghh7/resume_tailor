@@ -32,6 +32,7 @@ type ResumeEntry = {
 export default function HomePage() {
   const router = useRouter();
   const [repos, setRepos] = useState<RepoItem[]>([]);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [tokenReady, setTokenReady] = useState(false);
   const [loadingRepos, setLoadingRepos] = useState(true);
   const [jobDescription, setJobDescription] = useState('');
@@ -130,6 +131,8 @@ export default function HomePage() {
   }, [tokenReady]);
 
   const totalFiles = useMemo(() => repos.reduce((acc, repo) => acc + repo.file_count, 0), [repos]);
+  const readyRepos = useMemo(() => repos.filter((repo) => repo.embeddings_ready).length, [repos]);
+  const processingRepos = repos.length - readyRepos;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -171,101 +174,142 @@ export default function HomePage() {
   };
 
   return (
-    <main className="min-h-screen bg-stone-100 text-stone-900">
-      <div className="mx-auto grid max-w-7xl grid-cols-1 gap-6 p-6 md:grid-cols-[360px_1fr]">
-        <aside className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-          <h1 className="text-2xl font-bold">Ingested Files</h1>
-          <p className="mt-1 text-sm text-stone-600">{repos.length} repos · {totalFiles} files</p>
-          {loadingRepos ? (
-            <div className="mt-4 text-sm text-stone-500">Loading repositories...</div>
-          ) : repos.length === 0 ? (
-            <div className="mt-4 text-sm text-stone-500">No repositories found yet.</div>
-          ) : (
-            <div className="mt-4 space-y-3 overflow-y-auto pr-1" style={{ maxHeight: '78vh' }}>
-              {repos.map((repo) => (
-                <details key={repo.project_id} className="rounded-lg border border-stone-200 bg-stone-50">
-                  <summary className="cursor-pointer list-none px-3 py-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <p className="text-sm font-semibold text-stone-900">{repo.full_name || repo.github_url}</p>
-                        <p className="text-xs text-stone-600">{repo.file_count} files indexed</p>
-                      </div>
-                      <span className={`rounded-full px-2 py-0.5 text-xs ${repo.embeddings_ready ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                        {repo.embeddings_ready ? 'Ready' : 'Processing'}
-                      </span>
-                    </div>
-                  </summary>
-                  <div className="max-h-64 overflow-y-auto border-t border-stone-200 bg-white px-3 py-2 text-xs">
-                    {repo.files.length === 0 ? (
-                      <p className="text-stone-500">Files are still being ingested...</p>
-                    ) : (
-                      repo.files.map((file) => (
-                        <div key={file.id} className="mb-1 rounded border border-stone-100 bg-stone-50 px-2 py-1">
-                          <p className="truncate text-stone-800">{file.file_path}</p>
-                          <p className="text-[11px] text-stone-500">{file.language || 'unknown'} · {file.path_bucket || 'other'}</p>
+    <main
+      className="min-h-screen bg-slate-50 text-slate-900"
+      style={{ fontFamily: '"Space Grotesk", "Avenir Next", "Segoe UI", sans-serif' }}
+    >
+      <div className="flex min-h-screen w-full overflow-hidden bg-white">
+        <aside className={`${sidebarCollapsed ? 'w-16' : 'w-72'} flex-shrink-0 bg-indigo-950 p-3 text-indigo-100 transition-all duration-300`}>
+          <button
+            onClick={() => setSidebarCollapsed((prev) => !prev)}
+            className="mb-4 w-full rounded-md border border-indigo-400/30 bg-indigo-900 px-2 py-2 text-xs font-semibold hover:bg-indigo-800"
+          >
+            {sidebarCollapsed ? '>>' : 'Collapse'}
+          </button>
+
+          {!sidebarCollapsed && (
+            <>
+              <div className="mb-4 rounded-xl bg-indigo-900 p-3">
+                <p className="text-xs uppercase tracking-wider text-indigo-300">Resume Tailor</p>
+                <h1 className="mt-1 text-xl font-bold">Developer Dashboard</h1>
+              </div>
+
+              <div className="mb-3 text-xs font-semibold uppercase tracking-wider text-indigo-300">Ingested Repositories</div>
+              <div className="space-y-2 overflow-y-auto pr-1" style={{ maxHeight: '68vh' }}>
+                {loadingRepos ? (
+                  <p className="text-sm text-indigo-300">Loading repositories...</p>
+                ) : repos.length === 0 ? (
+                  <p className="text-sm text-indigo-300">No repositories found yet.</p>
+                ) : (
+                  repos.map((repo) => (
+                    <details key={repo.project_id} className="rounded-lg bg-indigo-900/70">
+                      <summary className="cursor-pointer list-none px-3 py-2">
+                        <p className="truncate text-sm font-semibold text-indigo-100">{repo.full_name || repo.github_url}</p>
+                        <div className="mt-1 flex items-center justify-between text-[11px]">
+                          <span className="text-indigo-300">{repo.file_count} files</span>
+                          <span className={`rounded-full px-2 py-0.5 ${repo.embeddings_ready ? 'bg-emerald-200 text-emerald-900' : 'bg-amber-200 text-amber-900'}`}>
+                            {repo.embeddings_ready ? 'Ready' : 'Processing'}
+                          </span>
                         </div>
-                      ))
-                    )}
-                  </div>
-                </details>
-              ))}
-            </div>
+                      </summary>
+                      <div className="max-h-48 overflow-y-auto border-t border-indigo-700 px-3 py-2">
+                        {repo.files.map((file) => (
+                          <p key={file.id} className="truncate rounded bg-indigo-950/70 px-2 py-1 text-xs text-indigo-200">
+                            {file.file_path}
+                          </p>
+                        ))}
+                      </div>
+                    </details>
+                  ))
+                )}
+              </div>
+            </>
           )}
         </aside>
 
-        <section className="rounded-2xl border border-stone-200 bg-white p-6 shadow-sm">
-          <h2 className="text-2xl font-bold">Job Match Recommendations</h2>
-          <p className="mt-1 text-sm text-stone-600">Paste a job description to get recommended projects and bullet points.</p>
-
-          <form onSubmit={handleSubmit} className="mt-5 space-y-4">
-            <textarea
-              className="min-h-[180px] w-full rounded-xl border border-stone-300 bg-stone-50 p-4 text-sm outline-none ring-0 focus:border-blue-500"
-              placeholder="Paste job description here..."
-              value={jobDescription}
-              onChange={(e) => setJobDescription(e.target.value)}
-              required
-            />
-            <div className="flex items-center gap-3">
-              <label className="text-sm font-medium text-stone-700">Top projects:</label>
-              <input
-                type="number"
-                min={1}
-                max={10}
-                value={numProjects}
-                onChange={(e) => setNumProjects(Number(e.target.value))}
-                className="w-16 rounded-md border border-stone-300 px-2 py-1 text-sm"
-              />
-              <button
-                type="submit"
-                disabled={loadingResults}
-                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-              >
-                {loadingResults ? 'Finding Matches...' : 'Find Matches'}
-              </button>
+        <section className="flex-1 overflow-y-auto bg-slate-50 p-4 md:p-6">
+          <header className="mb-5 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-wider text-indigo-600">Dashboard</p>
+              <h2 className="text-2xl font-bold text-slate-900">GitHub to Resume Assistant</h2>
             </div>
-          </form>
+            <div className="rounded-full bg-white px-4 py-2 text-xs font-semibold text-slate-600 shadow-sm">
+              {repos.length} repos • {totalFiles} files
+            </div>
+          </header>
 
-          {message && <div className="mt-4 rounded bg-blue-100 p-2 text-sm text-blue-800">{message}</div>}
-          {error && <div className="mt-4 rounded bg-red-100 p-2 text-sm text-red-700">{error}</div>}
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-xl border-t-4 border-violet-500 bg-white p-4 shadow-sm">
+              <p className="text-xs uppercase tracking-wider text-slate-500">Repos Connected</p>
+              <p className="mt-2 text-3xl font-bold">{repos.length}</p>
+            </div>
+            <div className="rounded-xl border-t-4 border-amber-500 bg-white p-4 shadow-sm">
+              <p className="text-xs uppercase tracking-wider text-slate-500">Files Indexed</p>
+              <p className="mt-2 text-3xl font-bold">{totalFiles}</p>
+            </div>
+            <div className="rounded-xl border-t-4 border-emerald-500 bg-white p-4 shadow-sm">
+              <p className="text-xs uppercase tracking-wider text-slate-500">Ready Repos</p>
+              <p className="mt-2 text-3xl font-bold">{readyRepos}</p>
+            </div>
+            <div className="rounded-xl border-t-4 border-sky-500 bg-white p-4 shadow-sm">
+              <p className="text-xs uppercase tracking-wider text-slate-500">Processing</p>
+              <p className="mt-2 text-3xl font-bold">{processingRepos}</p>
+            </div>
+          </div>
 
-          <div className="mt-6 space-y-4">
+          <div className="mt-5 rounded-2xl bg-white p-5 shadow-sm">
+            <h3 className="text-xl font-bold text-slate-900">Job Description Analyzer</h3>
+            <p className="mt-1 text-sm text-slate-600">Paste a JD and generate targeted resume bullets from your best-matching projects.</p>
+
+            <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+              <textarea
+                className="min-h-[190px] w-full rounded-xl border border-slate-300 bg-slate-50 p-4 text-sm outline-none focus:border-violet-500"
+                placeholder="Paste job description here..."
+                value={jobDescription}
+                onChange={(e) => setJobDescription(e.target.value)}
+                required
+              />
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="text-sm font-medium text-slate-700">Top projects</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={numProjects}
+                  onChange={(e) => setNumProjects(Number(e.target.value))}
+                  className="w-20 rounded-md border border-slate-300 px-2 py-1 text-sm"
+                />
+                <button
+                  type="submit"
+                  disabled={loadingResults}
+                  className="rounded-md bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50"
+                >
+                  {loadingResults ? 'Generating...' : 'Generate Bullets'}
+                </button>
+              </div>
+            </form>
+
+            {message && <div className="mt-4 rounded bg-sky-100 p-2 text-sm text-sky-800">{message}</div>}
+            {error && <div className="mt-4 rounded bg-rose-100 p-2 text-sm text-rose-700">{error}</div>}
+          </div>
+
+          <div className="mt-5 space-y-4">
             {results.map((entry, idx) => (
-              <article key={`${entry.github_url}-${idx}`} className="rounded-xl border border-stone-200 bg-stone-50 p-4">
+              <article key={`${entry.github_url}-${idx}`} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="mb-2 flex items-center justify-between gap-3">
-                  <h3 className="text-lg font-semibold text-stone-900">{entry.title}</h3>
-                  <a href={entry.github_url} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-700 hover:underline">
+                  <h3 className="text-lg font-semibold text-slate-900">{entry.title}</h3>
+                  <a href={entry.github_url} target="_blank" rel="noopener noreferrer" className="text-sm text-violet-700 hover:underline">
                     GitHub
                   </a>
                 </div>
                 {typeof entry.alignment_score !== 'undefined' && (
-                  <p className="mb-2 text-xs text-stone-500">Alignment score: {entry.alignment_score.toFixed(3)}</p>
+                  <p className="mb-2 text-xs text-slate-500">Alignment score: {entry.alignment_score.toFixed(3)}</p>
                 )}
-                <ul className="list-disc space-y-1 pl-5 text-sm text-stone-800">
+                <ul className="list-disc space-y-1 pl-5 text-sm text-slate-800">
                   {entry.bullets.map((bullet, i) => (
                     <li key={i}>{bullet}</li>
                   ))}
                 </ul>
-                <p className="mt-3 text-xs text-stone-500">Technologies: {entry.technologies.join(', ')}</p>
               </article>
             ))}
           </div>
