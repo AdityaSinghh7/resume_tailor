@@ -195,35 +195,42 @@ export default function HomePage() {
             <p className="mt-1 text-xs text-indigo-300">{repos.length} repos · {totalFiles} files</p>
           </div>
 
-          <div className="mb-3 text-xs font-semibold uppercase tracking-wider text-indigo-300">Ingested Repositories</div>
-          <div className="space-y-2 overflow-y-auto pr-1" style={{ maxHeight: '70vh' }}>
-            {loadingRepos ? (
-              <p className="text-sm text-indigo-300">Loading repositories...</p>
-            ) : repos.length === 0 ? (
-              <p className="text-sm text-indigo-300">No repositories found yet.</p>
-            ) : (
-              repos.map((repo) => (
-                <details key={repo.project_id} className="rounded-lg border border-indigo-900 bg-indigo-900/60">
-                  <summary className="cursor-pointer list-none px-3 py-2">
-                    <p className="truncate text-sm font-semibold text-indigo-100">{repo.full_name || repo.github_url}</p>
-                    <div className="mt-1 flex items-center justify-between text-[11px]">
-                      <span className="text-indigo-300">{repo.file_count} files</span>
-                      <span className={`rounded-full px-2 py-0.5 ${repo.embeddings_ready ? 'bg-emerald-200 text-emerald-900' : 'bg-amber-200 text-amber-900'}`}>
-                        {repo.embeddings_ready ? 'Ready' : 'Processing'}
-                      </span>
+          <details className="group rounded-xl border border-indigo-900 bg-indigo-900/70">
+            <summary className="cursor-pointer list-none px-3 py-2 text-xs font-semibold uppercase tracking-wider text-indigo-200">
+              <span className="flex items-center justify-between">
+                <span>Repositories</span>
+                <span className="text-xs transition-transform duration-200 group-open:rotate-180">▾</span>
+              </span>
+            </summary>
+            <div className="space-y-2 overflow-y-auto px-3 py-2" style={{ maxHeight: '66vh' }}>
+              {loadingRepos ? (
+                <p className="text-sm text-indigo-300">Loading repositories...</p>
+              ) : repos.length === 0 ? (
+                <p className="text-sm text-indigo-300">No repositories found yet.</p>
+              ) : (
+                repos.map((repo) => (
+                  <details key={repo.project_id} className="rounded-lg border border-indigo-900 bg-indigo-900/60">
+                    <summary className="cursor-pointer list-none px-3 py-2">
+                      <p className="truncate text-sm font-semibold text-indigo-100">{repo.full_name || repo.github_url}</p>
+                      <div className="mt-1 flex items-center justify-between text-[11px]">
+                        <span className="text-indigo-300">{repo.file_count} files</span>
+                        <span className={`rounded-full px-2 py-0.5 ${repo.embeddings_ready ? 'bg-emerald-200 text-emerald-900' : 'bg-amber-200 text-amber-900'}`}>
+                          {repo.embeddings_ready ? 'Ready' : 'Processing'}
+                        </span>
+                      </div>
+                    </summary>
+                    <div className="max-h-44 overflow-y-auto border-t border-indigo-800 px-3 py-2">
+                      {repo.files.map((file) => (
+                        <p key={file.id} className="truncate rounded bg-indigo-950/70 px-2 py-1 text-xs text-indigo-200">
+                          {file.file_path}
+                        </p>
+                      ))}
                     </div>
-                  </summary>
-                  <div className="max-h-48 overflow-y-auto border-t border-indigo-800 px-3 py-2">
-                    {repo.files.map((file) => (
-                      <p key={file.id} className="truncate rounded bg-indigo-950/70 px-2 py-1 text-xs text-indigo-200">
-                        {file.file_path}
-                      </p>
-                    ))}
-                  </div>
-                </details>
-              ))
-            )}
-          </div>
+                  </details>
+                ))
+              )}
+            </div>
+          </details>
         </aside>
 
         <section className="flex-1 overflow-y-auto bg-slate-50 p-4 md:p-6">
