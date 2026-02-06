@@ -32,7 +32,6 @@ type ResumeEntry = {
 export default function HomePage() {
   const router = useRouter();
   const [repos, setRepos] = useState<RepoItem[]>([]);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [tokenReady, setTokenReady] = useState(false);
   const [loadingRepos, setLoadingRepos] = useState(true);
   const [jobDescription, setJobDescription] = useState('');
@@ -179,52 +178,52 @@ export default function HomePage() {
       style={{ fontFamily: '"Space Grotesk", "Avenir Next", "Segoe UI", sans-serif' }}
     >
       <div className="flex min-h-screen w-full overflow-hidden bg-white">
-        <aside className={`${sidebarCollapsed ? 'w-16' : 'w-72'} flex-shrink-0 bg-indigo-950 p-3 text-indigo-100 transition-all duration-300`}>
-          <button
-            onClick={() => setSidebarCollapsed((prev) => !prev)}
-            className="mb-4 w-full rounded-md border border-indigo-400/30 bg-indigo-900 px-2 py-2 text-xs font-semibold hover:bg-indigo-800"
-          >
-            {sidebarCollapsed ? '>>' : 'Collapse'}
-          </button>
+        <aside className="w-72 flex-shrink-0 border-r border-indigo-950/10 bg-indigo-950 p-5 text-indigo-100">
+          <div className="mb-6 flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-700 text-lg font-bold">
+              RT
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wider text-indigo-300">Resume Tailor</p>
+              <h1 className="text-lg font-semibold">Studio</h1>
+            </div>
+          </div>
 
-          {!sidebarCollapsed && (
-            <>
-              <div className="mb-4 rounded-xl bg-indigo-900 p-3">
-                <p className="text-xs uppercase tracking-wider text-indigo-300">Resume Tailor</p>
-                <h1 className="mt-1 text-xl font-bold">Developer Dashboard</h1>
-              </div>
+          <div className="mb-4 rounded-xl bg-indigo-900/70 p-3">
+            <p className="text-xs uppercase tracking-wider text-indigo-300">Workspace</p>
+            <p className="mt-1 text-sm font-semibold">GitHub Resume Builder</p>
+            <p className="mt-1 text-xs text-indigo-300">{repos.length} repos · {totalFiles} files</p>
+          </div>
 
-              <div className="mb-3 text-xs font-semibold uppercase tracking-wider text-indigo-300">Ingested Repositories</div>
-              <div className="space-y-2 overflow-y-auto pr-1" style={{ maxHeight: '68vh' }}>
-                {loadingRepos ? (
-                  <p className="text-sm text-indigo-300">Loading repositories...</p>
-                ) : repos.length === 0 ? (
-                  <p className="text-sm text-indigo-300">No repositories found yet.</p>
-                ) : (
-                  repos.map((repo) => (
-                    <details key={repo.project_id} className="rounded-lg bg-indigo-900/70">
-                      <summary className="cursor-pointer list-none px-3 py-2">
-                        <p className="truncate text-sm font-semibold text-indigo-100">{repo.full_name || repo.github_url}</p>
-                        <div className="mt-1 flex items-center justify-between text-[11px]">
-                          <span className="text-indigo-300">{repo.file_count} files</span>
-                          <span className={`rounded-full px-2 py-0.5 ${repo.embeddings_ready ? 'bg-emerald-200 text-emerald-900' : 'bg-amber-200 text-amber-900'}`}>
-                            {repo.embeddings_ready ? 'Ready' : 'Processing'}
-                          </span>
-                        </div>
-                      </summary>
-                      <div className="max-h-48 overflow-y-auto border-t border-indigo-700 px-3 py-2">
-                        {repo.files.map((file) => (
-                          <p key={file.id} className="truncate rounded bg-indigo-950/70 px-2 py-1 text-xs text-indigo-200">
-                            {file.file_path}
-                          </p>
-                        ))}
-                      </div>
-                    </details>
-                  ))
-                )}
-              </div>
-            </>
-          )}
+          <div className="mb-3 text-xs font-semibold uppercase tracking-wider text-indigo-300">Ingested Repositories</div>
+          <div className="space-y-2 overflow-y-auto pr-1" style={{ maxHeight: '70vh' }}>
+            {loadingRepos ? (
+              <p className="text-sm text-indigo-300">Loading repositories...</p>
+            ) : repos.length === 0 ? (
+              <p className="text-sm text-indigo-300">No repositories found yet.</p>
+            ) : (
+              repos.map((repo) => (
+                <details key={repo.project_id} className="rounded-lg border border-indigo-900 bg-indigo-900/60">
+                  <summary className="cursor-pointer list-none px-3 py-2">
+                    <p className="truncate text-sm font-semibold text-indigo-100">{repo.full_name || repo.github_url}</p>
+                    <div className="mt-1 flex items-center justify-between text-[11px]">
+                      <span className="text-indigo-300">{repo.file_count} files</span>
+                      <span className={`rounded-full px-2 py-0.5 ${repo.embeddings_ready ? 'bg-emerald-200 text-emerald-900' : 'bg-amber-200 text-amber-900'}`}>
+                        {repo.embeddings_ready ? 'Ready' : 'Processing'}
+                      </span>
+                    </div>
+                  </summary>
+                  <div className="max-h-48 overflow-y-auto border-t border-indigo-800 px-3 py-2">
+                    {repo.files.map((file) => (
+                      <p key={file.id} className="truncate rounded bg-indigo-950/70 px-2 py-1 text-xs text-indigo-200">
+                        {file.file_path}
+                      </p>
+                    ))}
+                  </div>
+                </details>
+              ))
+            )}
+          </div>
         </aside>
 
         <section className="flex-1 overflow-y-auto bg-slate-50 p-4 md:p-6">
